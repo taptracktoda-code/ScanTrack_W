@@ -12,19 +12,38 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="{{ asset('css/dashboard.css') }}" rel="stylesheet">
+    <link href="{{ asset('css/auth.css') }}" rel="stylesheet">
 </head>
-<body class="bg-light d-flex align-items-center justify-content-center min-vh-100">
-    <div class="container py-5">
-        <div class="row justify-content-center">
-            <div class="col-md-6 col-lg-5">
-                <div class="card shadow-sm">
-                    <div class="card-body p-4">
-                        @yield('content')
-                    </div>
-                </div>
+<body class="auth-page">
+    <main class="auth-shell">
+        <section class="auth-brand-panel">
+            <div class="auth-brand-mark">
+                <img src="{{ asset('images/terminal-management-logo.svg') }}" alt="Terminal Management logo">
             </div>
-        </div>
-    </div>
+            <div>
+                <p class="auth-kicker">Terminal operations</p>
+                <h1>Keep every route moving.</h1>
+                <p class="auth-brand-copy">A clear, reliable workspace for managing drivers, vehicles, and daily terminal activity.</p>
+            </div>
+            <div class="auth-status">
+                <span class="auth-status-dot" aria-hidden="true"></span>
+                <span>Operations platform</span>
+            </div>
+        </section>
+
+        <section class="auth-form-panel">
+            <div class="auth-form-wrap">
+                <div class="auth-mobile-brand">
+                    <img src="{{ asset('images/terminal-management-logo.svg') }}" alt="Terminal Management logo">
+                    <span>Terminal Management</span>
+                </div>
+
+                @yield('content')
+
+                <p class="auth-footer">Secure access for authorized personnel</p>
+            </div>
+        </section>
+    </main>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
     @stack('scripts')
