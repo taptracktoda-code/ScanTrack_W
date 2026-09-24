@@ -38,6 +38,7 @@ class VehicleTest extends TestCase
     public function test_driver_registration_creates_a_vehicle_record_when_vehicle_number_is_provided(): void
     {
         $user = User::factory()->create([
+            'role' => 'Administrator',
             'user_id' => 'USER-200',
             'license_number' => 'LIC-200',
             'contact' => '09170000001',

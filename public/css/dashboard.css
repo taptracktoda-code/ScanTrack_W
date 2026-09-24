@@ -878,6 +878,11 @@ body {
     color: #b42318;
 }
 
+.driver-status-badge.is-pending {
+    background: #fff8e1;
+    color: #946200;
+}
+
 .driver-icon-btn {
     border: 0;
     color: #111827;
@@ -893,9 +898,265 @@ body {
     color: var(--dashboard-blue);
 }
 
+.driver-actions-cell {
+    white-space: nowrap;
+}
+
+.driver-qr-btn {
+    width: 76px;
+    min-width: 76px;
+    white-space: nowrap;
+}
+
 .driver-modal {
+    background: #ffffff !important;
     border: 0;
     border-radius: 10px;
+    overflow: hidden;
+}
+
+.driver-edit-modal {
+    border-top: 5px solid var(--dashboard-blue);
+    display: flex;
+    flex-direction: column;
+    max-height: calc(100vh - 2rem);
+    overflow: hidden;
+    width: 100%;
+}
+
+.driver-edit-dialog {
+    max-width: 760px;
+    width: calc(100% - 2rem);
+}
+
+.driver-edit-modal .modal-body {
+    background: #f8fafc;
+    min-height: 0;
+    overflow-y: auto;
+    padding: 1.5rem 1.75rem 1.7rem;
+}
+
+.driver-edit-layout {
+    display: grid;
+    gap: 1.5rem;
+    grid-template-columns: 190px minmax(0, 1fr);
+}
+
+.driver-edit-aside {
+    align-items: center;
+    background: linear-gradient(160deg, #1138d4 0%, #2459e8 100%);
+    border-radius: 10px;
+    color: #fff;
+    display: flex;
+    flex-direction: column;
+    min-height: 285px;
+    padding: 1.35rem 1rem;
+    text-align: center;
+}
+
+.driver-edit-aside-kicker {
+    align-self: flex-start;
+    font-size: 0.65rem;
+    font-weight: 800;
+    letter-spacing: 0.1em;
+    opacity: 0.72;
+    text-transform: uppercase;
+}
+
+.driver-edit-avatar {
+    align-items: center;
+    background: rgba(255, 255, 255, 0.18);
+    border: 1px solid rgba(255, 255, 255, 0.35);
+    border-radius: 50%;
+    display: flex;
+    font-size: 1.25rem;
+    font-weight: 800;
+    height: 72px;
+    justify-content: center;
+    margin: 1.4rem 0 0.85rem;
+    width: 72px;
+}
+
+.driver-edit-aside-name {
+    font-size: 1rem;
+    font-weight: 800;
+    line-height: 1.25;
+    max-width: 160px;
+}
+
+.driver-edit-aside .driver-status-badge {
+    margin-top: 0.7rem;
+}
+
+.driver-edit-aside-details {
+    border-top: 1px solid rgba(255, 255, 255, 0.2);
+    display: grid;
+    gap: 0.7rem;
+    margin-top: auto;
+    padding-top: 1rem;
+    width: 100%;
+}
+
+.driver-edit-aside-details div {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+}
+
+.driver-edit-aside-details span {
+    font-size: 0.62rem;
+    opacity: 0.7;
+    text-transform: uppercase;
+}
+
+.driver-edit-aside-details strong {
+    font-size: 0.78rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.driver-edit-fields {
+    min-width: 0;
+    padding-top: 0.15rem;
+}
+
+.driver-edit-fields .form-control,
+.driver-edit-fields .form-select {
+    display: block;
+    width: 100%;
+}
+
+.driver-edit-modal .modal-header,
+.driver-edit-modal .modal-footer {
+    background: #ffffff;
+}
+
+.driver-edit-modal .modal-header {
+    padding: 1.25rem 1.75rem;
+}
+
+.driver-edit-modal .modal-footer {
+    border-top: 1px solid #e8edf5;
+    gap: 0.65rem;
+    padding: 1rem 1.75rem;
+}
+
+.driver-edit-modal .form-label {
+    color: #344054;
+    font-size: 0.78rem;
+    font-weight: 800;
+    margin-bottom: 0.4rem;
+    white-space: nowrap;
+}
+
+.driver-edit-modal .form-control,
+.driver-edit-modal .form-select {
+    background: #ffffff;
+    min-height: 44px;
+}
+
+.driver-form-grid {
+    row-gap: 1.15rem !important;
+}
+
+.driver-modal-kicker {
+    color: var(--dashboard-blue);
+    font-size: 0.68rem;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    margin-bottom: 0.2rem;
+    text-transform: uppercase;
+}
+
+.driver-edit-summary {
+    align-items: center;
+    background: #f6f8ff;
+    border: 1px solid rgba(17, 56, 212, 0.1);
+    border-radius: 7px;
+    display: flex;
+    gap: 0.75rem;
+    margin-bottom: 1.25rem;
+    padding: 0.75rem;
+}
+
+.driver-edit-summary-name {
+    color: #111827;
+    font-size: 0.95rem;
+    font-weight: 800;
+}
+
+.driver-edit-summary-meta {
+    color: #667085;
+    font-size: 0.76rem;
+    margin-top: 0.15rem;
+}
+
+.driver-status-field {
+    max-width: 50%;
+}
+
+.driver-modal-cancel {
+    border: 1px solid #d9e0ea;
+    color: #475467;
+    font-weight: 700;
+}
+
+.driver-modal-cancel:hover {
+    background: #f8fafc;
+    border-color: #c6d0dd;
+    color: #111827;
+}
+
+.driver-form-section-label {
+    color: #667085;
+    font-size: 0.68rem;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    margin-bottom: -0.35rem;
+    text-transform: uppercase;
+}
+
+.driver-form-section-label-spaced {
+    margin-top: 0.35rem;
+}
+
+@media (max-width: 767.98px) {
+    .driver-edit-dialog {
+        margin: 0.75rem;
+        width: calc(100% - 1.5rem);
+    }
+
+    .driver-edit-modal .modal-body {
+        padding: 1.25rem;
+    }
+
+    .driver-edit-layout {
+        grid-template-columns: 1fr;
+    }
+
+    .driver-edit-aside {
+        min-height: 0;
+    }
+
+    .driver-edit-aside-details {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        margin-top: 1rem;
+    }
+
+    .driver-edit-modal .modal-header,
+    .driver-edit-modal .modal-footer {
+        padding-left: 1.25rem;
+        padding-right: 1.25rem;
+    }
+
+    .driver-status-field {
+        max-width: none;
+    }
+
+    .driver-edit-modal .form-label {
+        white-space: normal;
+    }
 }
 
 .report-secondary-button {

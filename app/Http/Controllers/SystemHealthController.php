@@ -4,7 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Driver;
 use App\Models\DriverLog;
-use App\Models\NfcCard;
+use App\Models\QrCode;
 use App\Models\Vehicle;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\DB;
@@ -51,7 +51,7 @@ class SystemHealthController extends Controller
 
         $drivers = Driver::count();
         $vehicles = Vehicle::count();
-        $nfcCards = NfcCard::count();
+        $qrCodes = QrCode::count();
         $todayAttendance = DriverLog::whereDate('created_at', now()->toDateString())->count();
         $pendingLogs = DriverLog::count();
 
@@ -109,7 +109,7 @@ class SystemHealthController extends Controller
             'storage' => $storage,
             'drivers' => $drivers,
             'vehicles' => $vehicles,
-            'nfc_cards' => $nfcCards,
+            'qr_codes' => $qrCodes,
             'today_attendance' => $todayAttendance,
             'pending_logs' => $pendingLogs,
             'last_scan' => $lastScanData,

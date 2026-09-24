@@ -25,13 +25,22 @@ Route::middleware('auth')->group(function () {
     Route::get('/dashboard/stats', [DashboardController::class, 'statsJson'])->name('dashboard.stats');
     Route::post('/dashboard/shift-status', [DashboardController::class, 'updateShiftStatus'])->name('dashboard.shift_status');
 
-    Route::get('/drivers', [DriverController::class, 'index'])->name('drivers');
-    Route::post('/drivers', [DriverController::class, 'store'])->name('drivers.store');
-    Route::put('/drivers/{driver}', [DriverController::class, 'update'])->name('drivers.update');
-    Route::delete('/drivers/{driver}', [DriverController::class, 'destroy'])->name('drivers.destroy');
-    Route::post('/drivers/{driver}/sms', [DriverController::class, 'sendSms'])->name('drivers.sendSms');
-    Route::get('/drivers/options', [DriverController::class, 'options'])->name('drivers.options');
-    Route::view('/nfc', 'nfc.index')->name('nfc');
+    Route::middleware('admin')->group(function () {
+        Route::get('/drivers', [DriverController::class, 'index'])->name('drivers');
+        Route::get('/qr-management', [DriverController::class, 'qrManagement'])->name('qr.management');
+        Route::post('/drivers/register', [DriverController::class, 'register'])->name('drivers.register');
+        Route::post('/drivers/{driver}/resend-credentials', [DriverController::class, 'resendCredentials'])->name('drivers.resendCredentials');
+        Route::get('/drivers/{driver}/qr', [DriverController::class, 'qrImage'])->name('drivers.qr');
+        Route::post('/drivers/{driver}/qr/regenerate', [DriverController::class, 'regenerateQr'])->name('drivers.qr.regenerate');
+        Route::post('/drivers/{driver}/qr/activate', [DriverController::class, 'activateQr'])->name('drivers.qr.activate');
+        Route::post('/drivers/{driver}/qr/deactivate', [DriverController::class, 'deactivateQr'])->name('drivers.qr.deactivate');
+        Route::post('/drivers', [DriverController::class, 'store'])->name('drivers.store');
+        Route::put('/drivers/{driver}', [DriverController::class, 'update'])->name('drivers.update');
+        Route::delete('/drivers/{driver}', [DriverController::class, 'destroy'])->name('drivers.destroy');
+        Route::post('/drivers/{driver}/sms', [DriverController::class, 'sendSms'])->name('drivers.sendSms');
+        Route::get('/drivers/options', [DriverController::class, 'options'])->name('drivers.options');
+    });
+    Route::redirect('/nfc', '/qr-management')->name('nfc');
     Route::get('/reports', [ReportController::class, 'index'])->name('reports');
     Route::get('/reports/export', [ReportController::class, 'export'])->name('reports.export');
     Route::get('/pending-logs', [ReportController::class, 'pendingLogs'])->name('pending.logs');

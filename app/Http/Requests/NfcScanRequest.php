@@ -41,6 +41,10 @@ class NfcScanRequest extends FormRequest
 
     protected function prepareForValidation(): void
     {
+        if ($this->filled('terminal_id')) {
+            $this->merge(['terminal_id' => (string) $this->input('terminal_id')]);
+        }
+
         if (! $this->filled('uid') && $this->filled('nfc_uid')) {
             $this->merge(['uid' => $this->input('nfc_uid')]);
         }

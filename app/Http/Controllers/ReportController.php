@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Driver;
 use App\Models\DriverLog;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use Symfony\Component\HttpFoundation\StreamedResponse;
@@ -13,8 +14,8 @@ class ReportController extends Controller
 {
     public function index(): View
     {
-        $drivers = Driver::latest()->get();
-        $driverLogs = DriverLog::latest()->get();
+        $drivers = Driver::with('organization')->latest()->get();
+        $driverLogs = DriverLog::with('driver.organization')->latest()->get();
         $monthlyPerformance = $this->monthlyDriverPerformance($drivers);
 
         return view('reports.index', [
@@ -56,6 +57,32 @@ class ReportController extends Controller
         return view('reports.pending', [
             'pendingLogs' => $pendingLogs,
             'count' => $pendingLogs->count(),
+        ]);
+    }
+
+    public function transactionsApi(): JsonResponse
+    {
+        $transactions = DriverLog::with(['driver.organization'])
+            ->latest()
+            ->take(50)
+            ->get()
+            ->map(function ($log) {
+                return [
+                    'id' => $log->id,
+                    'driver_id' => $log->driver_id,
+                    'driver_name' => $log->driver?->name,
+                    'organization' => $log->driver?->organization?->name,
+                    'attendance_type' => $log->attendance_type,
+                    'terminal_id' => $log->terminal_id,
+                    'status' => $log->status ?? 'completed',
+                    'scanned_at' => optional($log->scanned_at ?? $log->created_at)->toIso8601String(),
+                ];
+            });
+
+        return response()->json([
+            'success' => true,
+            'count' => $transactions->count(),
+            'transactions' => $transactions,
         ]);
     }
 
@@ -138,7 +165,7 @@ class ReportController extends Controller
 
     private function writeDriverSummaryCsv($handle): void
     {
-        fputcsv($handle, ['Driver name', 'License No.', 'Contact', 'Vehicle No.', 'Status', 'Created At', 'Updated At']);
+        fputcsv($handle, ['Driver name', 'License No.', 'Contact', 'Vehicle No.', 'Organization', 'Status', 'Created At', 'Updated At']);
 
         Driver::latest()->chunk(100, function ($drivers) use ($handle) {
             foreach ($drivers as $driver) {
@@ -147,6 +174,7 @@ class ReportController extends Controller
                     $driver->license_number,
                     $driver->contact_number,
                     $driver->vehicle_number ?: 'Unassigned',
+                    $driver->organization?->name ?: 'Not assigned',
                     $driver->status,
                     optional($driver->created_at)->format('Y-m-d H:i:s'),
                     optional($driver->updated_at)->format('Y-m-d H:i:s'),
@@ -157,14 +185,18 @@ class ReportController extends Controller
 
     private function writeDriverActivityCsv($handle): void
     {
-        fputcsv($handle, ['Log ID', 'Created At', 'Updated At']);
+        fputcsv($handle, ['Log ID', 'Driver', 'Vehicle No.', 'Organization', 'Transaction', 'Terminal', 'Scanned At']);
 
         DriverLog::latest()->chunk(100, function ($logs) use ($handle) {
             foreach ($logs as $log) {
                 fputcsv($handle, [
                     $log->id,
-                    optional($log->created_at)->format('Y-m-d H:i:s'),
-                    optional($log->updated_at)->format('Y-m-d H:i:s'),
+                    $log->driver?->name ?: 'Unknown driver',
+                    $log->driver?->vehicle_number ?: 'Unassigned',
+                    $log->driver?->organization?->name ?: 'Not assigned',
+                    $log->attendance_type ?: 'UNKNOWN',
+                    $log->terminal_id ?: 'N/A',
+                    optional($log->scanned_at ?: $log->created_at)->format('Y-m-d H:i:s'),
                 ]);
             }
         });

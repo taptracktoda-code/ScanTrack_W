@@ -5,14 +5,13 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\Driver;
 use App\Models\DriverLog;
-use App\Models\NfcCard;
+use App\Models\QrCode;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
-use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\ValidationException;
 
@@ -47,6 +46,17 @@ class DriverApiController extends Controller
                 'contact_number' => $attributes['phone_number'],
                 'vehicle_number' => null,
                 'status' => 'Active',
+            ]);
+
+            do {
+                $token = 'TT-DRV-' . strtoupper(bin2hex(random_bytes(6)));
+            } while (QrCode::where('qr_token', $token)->exists());
+
+            QrCode::create([
+                'driver_id' => $driver->id,
+                'qr_token' => $token,
+                'status' => 'Active',
+                'generated_at' => now(),
             ]);
 
             return User::create([
@@ -104,6 +114,47 @@ class DriverApiController extends Controller
     {
         $request->user()->currentAccessToken()?->delete();
         return response()->json(['success' => true, 'message' => 'Logged out successfully.']);
+    }
+
+    public function changePassword(Request $request): JsonResponse
+    {
+        $attributes = $request->validate([
+            'current_password' => ['required', 'string'],
+            'password' => ['required', 'string', 'confirmed', 'min:8'],
+        ]);
+        $user = $request->user();
+
+        if (! Hash::check($attributes['current_password'], $user->password)) {
+            return response()->json(['success' => false, 'message' => 'The current password is incorrect.'], 422);
+        }
+
+        $user->forceFill([
+            'password' => Hash::make($attributes['password']),
+            'must_change_password' => false,
+        ])->save();
+
+        return $this->success('Password changed successfully.', ['must_change_password' => false]);
+    }
+
+    public function updateShiftStatus(Request $request): JsonResponse
+    {
+        $attributes = $request->validate([
+            'shift_status' => ['required', 'string', 'in:Available,On Break,Off Duty'],
+        ]);
+
+        $user = $request->user();
+        if (strcasecmp((string) $user->role, 'driver') !== 0 || ! $this->driverExists($user)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'This account is not authorized for the driver application.',
+            ], 403);
+        }
+
+        $user->update(['shift_status' => $attributes['shift_status']]);
+
+        return $this->success('Shift status updated successfully.', [
+            'shift_status' => $user->shift_status,
+        ]);
     }
 
     public function profile(Request $request): JsonResponse
@@ -208,9 +259,7 @@ class DriverApiController extends Controller
     private function driverData(User $user): array
     {
         $driver = $this->driver($user);
-        $card = Schema::hasColumn('nfc_cards', 'driver_id')
-            ? NfcCard::where('driver_id', $driver->id)->first()
-            : null;
+        $qrCode = QrCode::where('driver_id', $driver->id)->first();
         return [
             'id' => (string) $driver->id,
             'driver_id' => (string) $driver->id,
@@ -218,8 +267,11 @@ class DriverApiController extends Controller
             'email' => $user->email,
             'phone' => $driver->contact_number,
             'vehicle_number' => $driver->vehicle_number,
-            'nfc_card_status' => $card ? 'registered' : 'unregistered',
+            'qr_code_status' => $qrCode?->status ? strtolower($qrCode->status) : 'unregistered',
+            'qr_identifier' => $qrCode?->qr_token,
             'account_status' => strtolower((string) ($driver->status ?: $user->status)),
+            'shift_status' => $user->shift_status ?: 'Available',
+            'must_change_password' => (bool) $user->must_change_password,
         ];
     }
 

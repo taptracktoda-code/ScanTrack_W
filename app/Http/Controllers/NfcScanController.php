@@ -19,6 +19,6 @@ class NfcScanController extends Controller
     {
         $result = $this->service->handle($request->validated());
 
-        return response()->json($result, $result['success'] ? 200 : 200);
+        return response()->json($result, 200);
     }
 }

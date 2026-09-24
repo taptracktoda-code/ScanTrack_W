@@ -106,8 +106,8 @@
                 <div class="col-md-6 col-xl-4">
                     <div class="stat-card card border-0 h-100">
                         <div class="card-body p-4">
-                            <div class="stat-label">Total Registered NFC Cards</div>
-                            <div class="stat-value" id="nfc-cards-count">-</div>
+                            <div class="stat-label">Total Registered QR Codes</div>
+                            <div class="stat-value" id="qr-codes-count">-</div>
                         </div>
                     </div>
                 </div>
@@ -130,7 +130,7 @@
                 <div class="col-12">
                     <div class="stat-card card border-0 h-100">
                         <div class="card-body p-4">
-                            <div class="stat-label">Last NFC Scan</div>
+                            <div class="stat-label">Last QR Scan</div>
                             <div class="mt-3 row g-3">
                                 <div class="col-md-4">
                                     <div class="text-muted small">Driver</div>
@@ -192,7 +192,7 @@
                 document.getElementById('storage-status').textContent = data.storage;
                 document.getElementById('drivers-count').textContent = data.drivers;
                 document.getElementById('vehicles-count').textContent = data.vehicles;
-                document.getElementById('nfc-cards-count').textContent = data.nfc_cards;
+                document.getElementById('qr-codes-count').textContent = data.qr_codes;
                 document.getElementById('attendance-count').textContent = data.today_attendance;
                 document.getElementById('pending-logs-count').textContent = data.pending_logs;
                 document.getElementById('last-scan-driver').textContent = data.last_scan?.driver || 'N/A';

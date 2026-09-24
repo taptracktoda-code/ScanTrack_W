@@ -12,7 +12,14 @@
 
     <section class="dashboard-hero driver-hero mb-4">
         <div class="d-flex flex-wrap align-items-start justify-content-between gap-3">
-            
+            <div>
+                <h1 class="h3 mb-1">Drivers</h1>
+                <p class="mb-0 text-muted">Manage driver accounts, vehicles, and assignments.</p>
+            </div>
+            <button class="btn btn-primary" type="button" data-bs-toggle="modal" data-bs-target="#driverCreateModal">
+                <i class="bi bi-person-plus-fill me-2" aria-hidden="true"></i>
+                Add New Driver
+            </button>
         </div>
     </section>
 
@@ -22,7 +29,12 @@
 
     @if ($errors->any())
         <div class="alert alert-danger border-0 shadow-sm">
-            Please check the driver details and try again.
+            <div class="fw-bold mb-1">Please check the driver details and try again.</div>
+            <ul class="mb-0 ps-3">
+                @foreach ($errors->all() as $error)
+                    <li>{{ $error }}</li>
+                @endforeach
+            </ul>
         </div>
     @endif
 
@@ -47,7 +59,9 @@
                         <th>License No.</th>
                         <th>Contact</th>
                         <th>Vehicle num.</th>
+                        <th>Organization</th>
                         <th>Status</th>
+                        <th>Duty</th>
                         <th class="text-end">Actions</th>
                     </tr>
                 </thead>
@@ -56,18 +70,26 @@
                         @php
                             $displayName = $driver->name ?: 'Unnamed Driver';
                             $initials = strtoupper(collect(explode(' ', $displayName))->map(fn ($part) => substr($part, 0, 1))->take(2)->implode(''));
+                            $driverAccount = $driverAccounts->get('DRIVER-' . strtoupper((string) $driver->id));
+                            $shiftStatus = $driverAccount?->shift_status ?: 'Available';
                         @endphp
                         <tr>
-                            <td>
+                            <td class="driver-actions-cell">
                                 <span class="driver-avatar-sm">{{ $initials }}</span>
                             </td>
                             <td class="fw-bold">{{ $displayName }}</td>
                             <td>{{ $driver->license_number ?: 'Not set' }}</td>
                             <td>{{ $driver->contact_number ?: 'Not set' }}</td>
                             <td class="fw-bold">{{ $driver->vehicle_number ?: 'Unassigned' }}</td>
+                            <td>{{ $driver->organization?->name ?: 'Not assigned' }}</td>
                             <td>
                                 <span class="driver-status-badge {{ $driver->status === 'Active' ? 'is-active' : 'is-suspended' }}">
                                     {{ $driver->status }}
+                                </span>
+                            </td>
+                            <td>
+                                <span class="driver-status-badge {{ $shiftStatus === 'Off Duty' ? 'is-suspended' : ($shiftStatus === 'On Break' ? 'is-pending' : 'is-active') }}">
+                                    {{ $shiftStatus }}
                                 </span>
                             </td>
                             <td>
@@ -91,6 +113,27 @@
                                     >
                                         <i class="bi bi-pencil-fill"></i>
                                     </button>
+                                    @if ($driver->qrCode)
+                                        <button
+                                            class="btn driver-icon-btn driver-qr-btn d-inline-flex align-items-center gap-1"
+                                            type="button"
+                                            data-bs-toggle="modal"
+                                            data-bs-target="#driverQrModal-{{ $driver->id }}"
+                                            aria-label="View QR code for {{ $displayName }}"
+                                            title="View QR"
+                                        >
+                                            <i class="bi bi-qr-code" aria-hidden="true"></i>
+                                            <span class="small">View QR</span>
+                                        </button>
+                                    @endif
+                                    @if ($driverAccounts->has('DRIVER-' . strtoupper((string) $driver->id)))
+                                        <form action="{{ route('drivers.resendCredentials', $driver) }}" method="POST">
+                                            @csrf
+                                            <button class="btn driver-icon-btn" type="submit" aria-label="Resend credentials to {{ $displayName }}" title="Resend temporary password">
+                                                <i class="bi bi-envelope-arrow-up-fill"></i>
+                                            </button>
+                                        </form>
+                                    @endif
                                     <form action="{{ route('drivers.destroy', $driver) }}" method="POST" data-swal-delete data-swal-name="{{ $displayName }}">
                                         @csrf
                                         @method('DELETE')
@@ -102,21 +145,9 @@
                             </td>
                         </tr>
 
-                        @include('drivers.partials.form-modal', [
-                            'modalId' => 'driverEditModal-' . $driver->id,
-                            'title' => 'Edit Driver',
-                            'action' => route('drivers.update', $driver),
-                            'method' => 'PUT',
-                            'driver' => $driver,
-                        ])
-
-                        @include('drivers.partials.sms-modal', [
-                            'modalId' => 'driverSmsModal-' . $driver->id,
-                            'driver' => $driver,
-                        ])
                     @empty
                         <tr>
-                            <td colspan="7" class="text-center py-5 text-muted">No drivers yet. Add your first driver to start tracking records.</td>
+                            <td colspan="9" class="text-center py-5 text-muted">No drivers yet. Add your first driver to start tracking records.</td>
                         </tr>
                     @endforelse
                 </tbody>
@@ -124,11 +155,31 @@
         </div>
     </section>
 
+    @foreach ($drivers as $driver)
+        @include('drivers.partials.form-modal', [
+            'modalId' => 'driverEditModal-' . $driver->id,
+            'title' => 'Edit Driver',
+            'action' => route('drivers.update', $driver),
+            'method' => 'PUT',
+            'driver' => $driver,
+        ])
+
+        @include('drivers.partials.sms-modal', [
+            'modalId' => 'driverSmsModal-' . $driver->id,
+            'driver' => $driver,
+        ])
+
+        @if ($driver->qrCode)
+            @include('drivers.partials.qr-modal', ['driver' => $driver, 'displayName' => $driver->name ?: 'Unnamed Driver'])
+        @endif
+    @endforeach
+
     @include('drivers.partials.form-modal', [
         'modalId' => 'driverCreateModal',
         'title' => 'Add New Driver',
-        'action' => route('drivers.store'),
+        'action' => route('drivers.register'),
         'method' => 'POST',
         'driver' => null,
+        'organizations' => $organizations,
     ])
 @endsection

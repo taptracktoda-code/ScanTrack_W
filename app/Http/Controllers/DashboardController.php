@@ -7,6 +7,7 @@ use App\Models\DriverLog;
 use App\Models\Setting;
 use App\Models\TodaOrganization;
 use App\Models\Vehicle;
+use App\Models\QrCode;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
@@ -48,6 +49,42 @@ class DashboardController extends Controller
         ]);
     }
 
+    public function apiDashboard(): JsonResponse
+    {
+        $today = now()->startOfDay();
+        $recentActivity = DriverLog::with(['driver.organization'])
+            ->latest('created_at')
+            ->take(10)
+            ->get()
+            ->map(fn (DriverLog $log): array => [
+                'id' => $log->id,
+                'driver_id' => $log->driver_id,
+                'driver_name' => $log->driver?->name,
+                'organization' => $log->driver?->organization?->name,
+                'attendance_type' => $log->attendance_type,
+                'terminal_id' => $log->terminal_id,
+                'scanned_at' => optional($log->scanned_at ?? $log->created_at)->toIso8601String(),
+            ])
+            ->values();
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'total_registered_drivers' => Driver::count(),
+                'active_drivers' => Driver::where('status', 'Active')->count(),
+                'scanned_entries' => DriverLog::where('created_at', '>=', $today)
+                    ->where('attendance_type', 'ENTRY')
+                    ->count(),
+                'scanned_exits' => DriverLog::where('created_at', '>=', $today)
+                    ->where('attendance_type', 'EXIT')
+                    ->count(),
+                'drivers_currently_inside' => $this->driversInside(),
+                'recent_activity' => $recentActivity,
+            ],
+            'updated_at' => now()->toIso8601String(),
+        ]);
+    }
+
     private function stats(?iterable $organizations = null): array
     {
         $today = now()->startOfDay();
@@ -69,6 +106,26 @@ class DashboardController extends Controller
                 'value' => Driver::count(),
                 'icon' => 'bi-person-badge',
             ],
+            'active_qr_codes' => [
+                'label' => 'Active QR Codes',
+                'value' => QrCode::where('status', 'Active')->count(),
+                'icon' => 'bi-qr-code',
+            ],
+            'today_entries' => [
+                'label' => "Today's Entries",
+                'value' => DriverLog::whereDate('created_at', today())->where('attendance_type', 'ENTRY')->count(),
+                'icon' => 'bi-box-arrow-in-right',
+            ],
+            'today_exits' => [
+                'label' => "Today's Exits",
+                'value' => DriverLog::whereDate('created_at', today())->where('attendance_type', 'EXIT')->count(),
+                'icon' => 'bi-box-arrow-right',
+            ],
+            'drivers_inside' => [
+                'label' => 'Drivers Currently Inside',
+                'value' => $this->driversInside(),
+                'icon' => 'bi-people',
+            ],
             'driver_logs_today' => [
                 'label' => "Today's Driver Log",
                 'value' => DriverLog::where('created_at', '>=', $today)->count(),
@@ -80,5 +137,13 @@ class DashboardController extends Controller
                 'icon' => 'bi-hourglass-split',
             ],
         ];
+    }
+
+    private function driversInside(): int
+    {
+        return Driver::with('logs')
+            ->get()
+            ->filter(fn (Driver $driver): bool => $driver->logs->sortByDesc('created_at')->first()?->attendance_type === 'ENTRY')
+            ->count();
     }
 }

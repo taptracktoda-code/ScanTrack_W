@@ -5,7 +5,7 @@
         <div class="d-flex flex-wrap align-items-center justify-content-between gap-3">
             <div>
                 <h2 class="dashboard-page-title mb-1">Pending Logs</h2>
-                <p class="dashboard-page-subtitle mb-0">Review recent pending driver logs.</p>
+                <p class="dashboard-page-subtitle mb-0">Review recent QR entry and exit transactions.</p>
             </div>
             <div class="d-flex flex-wrap align-items-center gap-2">
                 <span class="dashboard-mini-pill">
@@ -21,21 +21,25 @@
             <table class="table driver-table align-middle mb-0">
                 <thead>
                     <tr>
-                        <th>Log ID</th>
-                        <th>Created</th>
-                        <th>Updated</th>
+                        <th>Driver</th>
+                        <th>Vehicle</th>
+                        <th>Organization</th>
+                        <th>Transaction</th>
+                        <th>Scanned</th>
                     </tr>
                 </thead>
                 <tbody>
                     @forelse ($pendingLogs as $log)
                         <tr>
-                            <td>{{ $log->id }}</td>
-                            <td>{{ optional($log->created_at)->format('M j, Y H:i') }}</td>
-                            <td>{{ optional($log->updated_at)->format('M j, Y H:i') }}</td>
+                            <td class="fw-bold">{{ $log->driver?->name ?: 'Unknown driver' }}</td>
+                            <td>{{ $log->driver?->vehicle_number ?: 'Unassigned' }}</td>
+                            <td>{{ $log->driver?->organization?->name ?: 'Not assigned' }}</td>
+                            <td><span class="driver-status-badge {{ $log->attendance_type === 'ENTRY' ? 'is-active' : 'is-suspended' }}">{{ $log->attendance_type ?: 'UNKNOWN' }}</span></td>
+                            <td>{{ optional($log->scanned_at ?: $log->created_at)->format('M j, Y H:i') }}</td>
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="3" class="text-center py-5 text-muted">No pending logs found.</td>
+                            <td colspan="5" class="text-center py-5 text-muted">No QR transactions found.</td>
                         </tr>
                     @endforelse
                 </tbody>

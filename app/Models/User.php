@@ -34,6 +34,7 @@ class User extends Authenticatable
         'status',
         'shift_status',
         'driver_id',
+        'must_change_password',
     ];
 
     /**
@@ -56,6 +57,12 @@ class User extends Authenticatable
         return [
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
+            'must_change_password' => 'boolean',
         ];
+    }
+
+    public function driver()
+    {
+        return $this->hasOne(Driver::class, 'id', 'driver_id');
     }
 }

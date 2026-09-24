@@ -2,7 +2,7 @@
     $menuItems = [
         ['label' => 'Dashboard', 'icon' => 'bi-speedometer2', 'route' => 'dashboard'],
         ['label' => 'Drivers', 'icon' => 'bi-person-badge', 'route' => 'drivers'],
-        ['label' => 'Scanned NFC', 'icon' => 'bi-qr-code-scan', 'route' => 'nfc'],
+        ['label' => 'QR Management', 'icon' => 'bi-qr-code-scan', 'route' => 'qr.management'],
         ['label' => 'Reports', 'icon' => 'bi-file-earmark-text', 'route' => 'reports'],
         ['label' => 'Vehicles', 'icon' => 'bi-truck', 'route' => 'vehicles'],
         ['label' => 'Analytics', 'icon' => 'bi-graph-up-arrow', 'route' => 'analytics'],

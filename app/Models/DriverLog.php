@@ -11,4 +11,9 @@ class DriverLog extends Model
     protected $casts = [
         'scanned_at' => 'datetime',
     ];
+
+    public function driver()
+    {
+        return $this->belongsTo(Driver::class);
+    }
 }
