@@ -1,6 +1,6 @@
-# Driver Management & QR/NFC Tracking System
+# ScanTrack: QR-Based Entry and Exit Monitoring System
 
-A Laravel-based web application for managing drivers, vehicles, QR cards, NFC scan events, shift tracking, reports, and operational settings.
+A Laravel-based system for managing TODA drivers, vehicles, QR credentials, terminal entry and exit scans, attendance, reports, and operational settings.
 
 ## Overview
 
@@ -8,8 +8,8 @@ This project is designed for a transport or fleet operation workflow where admin
 
 - register and manage drivers
 - assign and manage vehicles
-- generate and manage QR codes and NFC cards
-- track driver activity through NFC/QR scans
+- generate and manage secure QR codes for drivers
+- track driver activity through authenticated QR scans
 - review logs, pending records, and reports
 - manage organization and system settings
 - monitor dashboard and operational health
@@ -19,7 +19,7 @@ This project is designed for a transport or fleet operation workflow where admin
 - Admin authentication and role-based access
 - Driver registration and profile management
 - QR code generation and activation/deactivation
-- NFC scan processing and log tracking
+- QR scan processing and entry/exit log tracking
 - Dashboard statistics and shift status updates
 - Reports and export support
 - Vehicle management

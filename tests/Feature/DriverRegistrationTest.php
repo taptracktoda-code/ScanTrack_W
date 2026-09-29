@@ -45,9 +45,14 @@ class DriverRegistrationTest extends TestCase
         ]);
         $this->assertDatabaseHas('vehicles', ['plate_number' => 'ABC-1234', 'vehicle_type' => 'Tricycle']);
         $this->assertDatabaseCount('qr_codes', 1);
+        $this->assertDatabaseHas('terminal_activities', [
+            'driver_id' => \App\Models\Driver::firstOrFail()->id,
+            'admin_id' => $admin->id,
+            'activity' => 'Driver registered',
+        ]);
         $qrCode = \App\Models\QrCode::firstOrFail();
         $this->assertSame('Active', $qrCode->status);
-        $this->assertMatchesRegularExpression('/^TT-DRV-[A-F0-9]{12}$/', $qrCode->qr_token);
+        $this->assertMatchesRegularExpression('/^[a-f0-9]{32}$/', $qrCode->qr_token);
         $this->assertSame($qrCode->driver_id, \App\Models\Driver::firstOrFail()->id);
         $this->actingAs($admin)
             ->get(route('drivers.qr', \App\Models\Driver::firstOrFail()))

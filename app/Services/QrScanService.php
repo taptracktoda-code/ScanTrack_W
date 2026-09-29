@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\DriverLog;
 use App\Models\QrCode;
+use App\Models\TerminalActivity;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
 
@@ -38,7 +39,12 @@ class QrScanService
             return $this->failure('Driver account is inactive.');
         }
 
-        $result = DB::transaction(function () use ($driver, $data): array {
+        $result = DB::transaction(function () use ($driver, $data, $qrCode): array {
+            $lockedQrCode = QrCode::query()->whereKey($qrCode->id)->lockForUpdate()->first();
+            if (! $lockedQrCode || $lockedQrCode->status !== 'Active') {
+                return ['inactive' => true];
+            }
+
             $latestLog = DriverLog::where('driver_id', $driver->id)
                 ->latest('created_at')
                 ->lockForUpdate()
@@ -55,8 +61,16 @@ class QrScanService
                 'attendance_type' => $transactionType,
                 'terminal_id' => $data['terminal_id'] ?? null,
                 'scanned_at' => $timestamp,
+                'scan_method' => 'QR',
                 'created_at' => $timestamp,
                 'updated_at' => $timestamp,
+            ]);
+
+            TerminalActivity::create([
+                'admin_id' => $data['admin_id'] ?? null,
+                'driver_id' => $driver->id,
+                'activity' => $transactionType === 'ENTRY' ? 'Driver entered terminal' : 'Driver exited terminal',
+                'description' => 'QR scan accepted' . (filled($data['terminal_id'] ?? null) ? ' at terminal ' . $data['terminal_id'] : ''),
             ]);
 
             return ['log' => $log, 'transaction_type' => $transactionType];
@@ -66,12 +80,18 @@ class QrScanService
             return $this->failure('Duplicate scan detected.');
         }
 
+        if ($result['inactive'] ?? false) {
+            return $this->failure('QR code is inactive.');
+        }
+
         $transactionType = $result['transaction_type'];
         $timestamp = $result['log']->scanned_at ?? $result['log']->created_at;
 
         return [
             'success' => true,
             'message' => ucfirst(strtolower($transactionType)) . ' recorded successfully.',
+            'scan_type' => $transactionType,
+            'scanned_at' => $timestamp?->toIso8601String(),
             'transaction_type' => $transactionType,
             'driver' => ['id' => $driver->id, 'name' => $driver->name],
             'vehicle' => ['plate_number' => $driver->vehicle?->plate_number ?? $driver->vehicle_number],

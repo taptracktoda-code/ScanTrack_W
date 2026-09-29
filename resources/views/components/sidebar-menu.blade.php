@@ -53,14 +53,19 @@
                     <span>{{ $item['label'] }}</span>
                 </a>
             @endforeach
-
-            <form action="{{ route('logout') }}" method="POST" class="mt-2">
-                @csrf
-                <button type="submit" class="sidebar-link sidebar-action logout-link w-100">
-                    <i class="bi bi-box-arrow-right"></i>
-                    <span>Logout</span>
-                </button>
-            </form>
         </nav>
+    </div>
+    <div class="sidebar-footer mt-4">
+        <a href="{{ route('settings.profile') }}" class="sidebar-link {{ request()->routeIs('settings.profile') ? 'active' : '' }}">
+            <i class="bi bi-person-gear"></i>
+            <span>Admin Profile</span>
+        </a>
+        <form action="{{ route('logout') }}" method="POST" class="mt-2">
+            @csrf
+            <button type="submit" class="sidebar-link sidebar-action logout-link w-100">
+                <i class="bi bi-box-arrow-right"></i>
+                <span>Logout</span>
+            </button>
+        </form>
     </div>
 </div>

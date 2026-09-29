@@ -50,6 +50,12 @@
     </section>
 
     <section class="driver-table-card">
+        @if ($search !== '')
+            <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 px-3 py-3 border-bottom">
+                <div class="small text-muted">Showing {{ $drivers->count() }} driver result{{ $drivers->count() === 1 ? '' : 's' }} for <strong class="text-body">{{ $search }}</strong></div>
+                <a class="btn btn-sm btn-outline-secondary" href="{{ route('drivers') }}">Clear filter</a>
+            </div>
+        @endif
         <div class="table-responsive">
             <table class="table driver-table align-middle mb-0">
                 <thead>

@@ -19,10 +19,18 @@ class QrScanTest extends TestCase
         [$admin, $qrCode] = $this->driverFixture();
 
         $response = $this->withToken($admin->createToken('admin')->plainTextToken)
-            ->postJson('/api/admin/qr/scan', ['qr_identifier' => $qrCode->qr_token]);
+            ->postJson('/api/admin/qr/scan', ['qr_token' => $qrCode->qr_token]);
 
-        $response->assertOk()->assertJsonPath('transaction_type', 'ENTRY');
-        $this->assertDatabaseHas('driver_logs', ['driver_id' => $qrCode->driver_id, 'attendance_type' => 'ENTRY']);
+        $response->assertOk()
+            ->assertJsonPath('transaction_type', 'ENTRY')
+            ->assertJsonPath('scan_type', 'ENTRY')
+            ->assertJsonStructure(['scanned_at']);
+        $this->assertDatabaseHas('driver_logs', ['driver_id' => $qrCode->driver_id, 'attendance_type' => 'ENTRY', 'scan_method' => 'QR']);
+        $this->assertDatabaseHas('terminal_activities', [
+            'driver_id' => $qrCode->driver_id,
+            'admin_id' => $admin->id,
+            'activity' => 'Driver entered terminal',
+        ]);
 
         $this->travel(11)->seconds();
         $response = $this->withToken($admin->createToken('admin-2')->plainTextToken)
@@ -54,9 +62,38 @@ class QrScanTest extends TestCase
         [, $qrCode] = $this->driverFixture();
         $driver = User::factory()->create(['role' => 'Driver']);
 
+        $this->postJson('/api/qr/scan', ['qr_token' => $qrCode->qr_token])
+            ->assertUnauthorized();
+
         $this->withToken($driver->createToken('driver')->plainTextToken)
             ->postJson('/api/admin/qr/scan', ['qr_identifier' => $qrCode->qr_token])
             ->assertForbidden();
+
+        $this->withToken($driver->createToken('driver-qr-scan')->plainTextToken)
+            ->postJson('/api/qr/scan', ['qr_token' => $qrCode->qr_token])
+            ->assertForbidden();
+    }
+
+    public function test_admin_can_view_attendance_and_terminal_activities(): void
+    {
+        [$admin, $qrCode] = $this->driverFixture();
+        $this->withToken($admin->createToken('admin-activity')->plainTextToken)
+            ->postJson('/api/qr/scan', ['qr_token' => $qrCode->qr_token])
+            ->assertOk();
+
+        $this->actingAs($admin)
+            ->get('/attendance')
+            ->assertOk()
+            ->assertSee('Attendance')
+            ->assertSee('Juan Dela Cruz')
+            ->assertSee('QR');
+
+        $this->actingAs($admin)
+            ->get('/terminal-activities')
+            ->assertOk()
+            ->assertSee('Terminal Activities')
+            ->assertSee('Driver entered terminal')
+            ->assertSee('QR scan accepted');
     }
 
     private function driverFixture(): array

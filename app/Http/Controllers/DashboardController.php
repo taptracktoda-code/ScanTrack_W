@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Driver;
 use App\Models\DriverLog;
 use App\Models\Setting;
+use App\Models\TerminalActivity;
 use App\Models\TodaOrganization;
 use App\Models\Vehicle;
 use App\Models\QrCode;
@@ -22,6 +23,7 @@ class DashboardController extends Controller
         return view('dashboard.index', [
             'stats' => $this->stats($organizations),
             'organizations' => $organizations,
+            'recentScans' => DriverLog::with(['driver.organization'])->latest('created_at')->limit(8)->get(),
             'shiftStatus' => $shiftStatus,
         ]);
     }
@@ -49,6 +51,25 @@ class DashboardController extends Controller
         ]);
     }
 
+    public function notificationFeed(): JsonResponse
+    {
+        $notifications = TerminalActivity::with('driver')
+            ->latest('id')
+            ->limit(8)
+            ->get()
+            ->map(fn (TerminalActivity $activity): array => [
+                'id' => $activity->id,
+                'title' => $activity->activity,
+                'description' => collect([$activity->driver?->name, $activity->description])
+                    ->filter()
+                    ->implode(' · '),
+                'created_at' => $activity->created_at?->diffForHumans(),
+            ])
+            ->values();
+
+        return response()->json(['notifications' => $notifications]);
+    }
+
     public function apiDashboard(): JsonResponse
     {
         $today = now()->startOfDay();
@@ -62,6 +83,7 @@ class DashboardController extends Controller
                 'driver_name' => $log->driver?->name,
                 'organization' => $log->driver?->organization?->name,
                 'attendance_type' => $log->attendance_type,
+                'scan_method' => $log->scan_method,
                 'terminal_id' => $log->terminal_id,
                 'scanned_at' => optional($log->scanned_at ?? $log->created_at)->toIso8601String(),
             ])
@@ -79,6 +101,8 @@ class DashboardController extends Controller
                     ->where('attendance_type', 'EXIT')
                     ->count(),
                 'drivers_currently_inside' => $this->driversInside(),
+                'active_qr_codes' => QrCode::where('status', 'Active')->count(),
+                'inactive_qr_codes' => QrCode::where('status', 'Inactive')->count(),
                 'recent_activity' => $recentActivity,
             ],
             'updated_at' => now()->toIso8601String(),
@@ -109,6 +133,11 @@ class DashboardController extends Controller
             'active_qr_codes' => [
                 'label' => 'Active QR Codes',
                 'value' => QrCode::where('status', 'Active')->count(),
+                'icon' => 'bi-qr-code',
+            ],
+            'inactive_qr_codes' => [
+                'label' => 'Inactive QR Codes',
+                'value' => QrCode::where('status', 'Inactive')->count(),
                 'icon' => 'bi-qr-code',
             ],
             'today_entries' => [

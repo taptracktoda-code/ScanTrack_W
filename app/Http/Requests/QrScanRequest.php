@@ -16,7 +16,8 @@ class QrScanRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'qr_identifier' => ['required', 'string', 'max:32'],
+            'qr_token' => ['required_without:qr_identifier', 'string', 'max:32'],
+            'qr_identifier' => ['required_without:qr_token', 'string', 'max:32'],
             'terminal_id' => ['nullable', 'string', 'max:255'],
         ];
     }
@@ -28,5 +29,16 @@ class QrScanRequest extends FormRequest
             'message' => 'Invalid QR scan request.',
             'errors' => $validator->errors(),
         ], 422));
+    }
+
+    protected function prepareForValidation(): void
+    {
+        if (! $this->filled('qr_token') && $this->filled('qr_identifier')) {
+            $this->merge(['qr_token' => $this->input('qr_identifier')]);
+        }
+
+        if (! $this->filled('qr_identifier') && $this->filled('qr_token')) {
+            $this->merge(['qr_identifier' => $this->input('qr_token')]);
+        }
     }
 }

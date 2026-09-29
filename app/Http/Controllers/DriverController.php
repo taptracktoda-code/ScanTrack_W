@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Driver;
 use App\Models\QrCode;
+use App\Models\TerminalActivity;
 use App\Models\TodaOrganization;
 use App\Models\User;
 use App\Models\Vehicle;
@@ -11,6 +12,7 @@ use App\Mail\DriverAccountCreatedMail;
 use Endroid\QrCode\Builder\Builder;
 use Endroid\QrCode\Writer\SvgWriter;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
@@ -21,22 +23,78 @@ use Illuminate\View\View;
 
 class DriverController extends Controller
 {
-    public function index(): View
+    public function index(Request $request): View
     {
-        $drivers = Driver::with(['organization', 'qrCode'])->latest()->get();
+        $search = trim((string) $request->query('search', ''));
+        $driverId = preg_match('/^(?:DRIVER-)?(\d+)$/i', $search, $matches) ? (int) $matches[1] : null;
+        $driverQuery = Driver::with(['organization', 'qrCode']);
+
+        if ($search !== '') {
+            $driverQuery->where(function ($query) use ($search, $driverId): void {
+                $query->where('name', 'like', "%{$search}%")
+                    ->orWhere('first_name', 'like', "%{$search}%")
+                    ->orWhere('last_name', 'like', "%{$search}%")
+                    ->orWhere('vehicle_number', 'like', "%{$search}%")
+                    ->orWhereHas('organization', fn ($organizationQuery) => $organizationQuery->where('name', 'like', "%{$search}%"));
+
+                if ($driverId !== null) {
+                    $query->orWhere('id', $driverId);
+                }
+            });
+        }
+
+        $drivers = $driverQuery->latest()->get();
         $organizations = TodaOrganization::orderBy('name')->get();
         $driverAccounts = User::whereIn('user_id', $drivers->map(fn (Driver $driver): string => 'DRIVER-' . strtoupper((string) $driver->id)))
             ->get()
             ->keyBy('user_id');
 
         $stats = [
-            'active' => $drivers->where('status', 'Active')->count(),
-            'in_service' => $drivers->where('status', 'Active')->whereNotNull('vehicle_number')->count(),
-            'today' => $drivers->where('updated_at', '>=', now()->startOfDay())->count(),
-            'suspended' => $drivers->where('status', 'Suspended')->count(),
+            'active' => Driver::where('status', 'Active')->count(),
+            'in_service' => Driver::where('status', 'Active')->whereNotNull('vehicle_number')->count(),
+            'today' => Driver::where('updated_at', '>=', now()->startOfDay())->count(),
+            'suspended' => Driver::where('status', 'Suspended')->count(),
         ];
 
-        return view('drivers.index', compact('drivers', 'stats', 'organizations', 'driverAccounts'));
+        return view('drivers.index', compact('drivers', 'stats', 'organizations', 'driverAccounts', 'search'));
+    }
+
+    public function search(Request $request): JsonResponse
+    {
+        $attributes = $request->validate([
+            'q' => ['required', 'string', 'max:100'],
+        ]);
+        $term = trim($attributes['q']);
+        $driverId = preg_match('/^(?:DRIVER-)?(\d+)$/i', $term, $matches) ? (int) $matches[1] : null;
+
+        $drivers = Driver::query()
+            ->with('organization')
+            ->where(function ($query) use ($term, $driverId): void {
+                $query->where('name', 'like', "%{$term}%")
+                    ->orWhere('first_name', 'like', "%{$term}%")
+                    ->orWhere('last_name', 'like', "%{$term}%")
+                    ->orWhere('vehicle_number', 'like', "%{$term}%")
+                    ->orWhereHas('organization', fn ($organizationQuery) => $organizationQuery->where('name', 'like', "%{$term}%"));
+
+                if ($driverId !== null) {
+                    $query->orWhere('id', $driverId);
+                }
+            })
+            ->orderBy('name')
+            ->limit(8)
+            ->get()
+            ->map(fn (Driver $driver): array => [
+                'id' => $driver->id,
+                'driver_id' => 'DRIVER-' . $driver->id,
+                'name' => $driver->name,
+                'vehicle_number' => $driver->vehicle_number,
+                'organization' => $driver->organization?->name,
+                'status' => $driver->status,
+                'url' => route('drivers', ['search' => 'DRIVER-' . $driver->id]),
+            ])
+            ->values();
+
+        return response()->json(['drivers' => $drivers]);
     }
 
     public function qrManagement(Request $request): View
@@ -115,6 +173,12 @@ class DriverController extends Controller
             ]);
 
             $this->issueQrCode($driver);
+            TerminalActivity::create([
+                'admin_id' => auth()->id(),
+                'driver_id' => $driver->id,
+                'activity' => 'Driver registered',
+                'description' => 'Driver account and QR code created',
+            ]);
 
             return $driver;
         });
@@ -202,6 +266,12 @@ class DriverController extends Controller
     public function regenerateQr(Driver $driver): RedirectResponse
     {
         $this->issueQrCode($driver, replace: true);
+        TerminalActivity::create([
+            'admin_id' => auth()->id(),
+            'driver_id' => $driver->id,
+            'activity' => 'QR regenerated',
+            'description' => 'Previous QR token was replaced',
+        ]);
 
         return redirect()->route('drivers')->with('status', 'The driver QR code was regenerated. The previous QR code is no longer active.');
     }
@@ -209,6 +279,11 @@ class DriverController extends Controller
     public function activateQr(Driver $driver): RedirectResponse
     {
         $driver->qrCode()->update(['status' => 'Active']);
+        TerminalActivity::create([
+            'admin_id' => auth()->id(),
+            'driver_id' => $driver->id,
+            'activity' => 'QR activated',
+        ]);
 
         return redirect()->route('drivers')->with('status', 'The driver QR code is active.');
     }
@@ -216,6 +291,11 @@ class DriverController extends Controller
     public function deactivateQr(Driver $driver): RedirectResponse
     {
         $driver->qrCode()->update(['status' => 'Inactive']);
+        TerminalActivity::create([
+            'admin_id' => auth()->id(),
+            'driver_id' => $driver->id,
+            'activity' => 'QR deactivated',
+        ]);
 
         return redirect()->route('drivers')->with('status', 'The driver QR code was deactivated.');
     }
@@ -292,7 +372,7 @@ class DriverController extends Controller
         }
 
         do {
-            $token = 'TT-DRV-' . strtoupper(bin2hex(random_bytes(6)));
+            $token = bin2hex(random_bytes(16));
         } while (QrCode::where('qr_token', $token)->exists());
 
         return $driver->qrCode()->updateOrCreate(

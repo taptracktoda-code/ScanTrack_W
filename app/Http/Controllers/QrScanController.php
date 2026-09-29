@@ -14,7 +14,9 @@ class QrScanController extends Controller
 
     public function scan(QrScanRequest $request): JsonResponse
     {
-        $result = $this->service->handle($request->validated());
+        $data = $request->validated();
+        $data['admin_id'] = $request->user()->id;
+        $result = $this->service->handle($data);
 
         return response()->json($result, $result['success'] ? 200 : 422);
     }

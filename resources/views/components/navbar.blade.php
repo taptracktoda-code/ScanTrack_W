@@ -18,12 +18,23 @@
                 <button class="btn btn-light nav-icon-button" type="button" aria-label="Send SMS" data-bs-toggle="modal" data-bs-target="#sendSmsModal">
                     <i class="bi bi-chat-left-text"></i>
                 </button>
-                <a href="{{ route('notifications') }}" class="btn btn-light nav-icon-button position-relative navbar-notifications-button" aria-label="Notifications">
-                    <i class="bi bi-bell"></i>
-                    <span id="navbar-notification-badge" class="position-absolute top-0 start-100 translate-middle p-1 bg-danger border border-light rounded-circle d-none">
-                        <span id="navbar-notification-count" class="visually-hidden">0</span>
-                    </span>
-                </a>
+                @if (strcasecmp((string) auth()->user()?->role, 'administrator') === 0)
+                    <div class="dropdown">
+                        <button id="navbar-notifications-toggle" type="button" class="btn btn-light nav-icon-button position-relative navbar-notifications-button" aria-label="Notifications" title="Notifications" data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-expanded="false">
+                            <i class="bi bi-bell"></i>
+                            <span id="navbar-notification-badge" class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger border border-light d-none">0</span>
+                        </button>
+                        <div class="dropdown-menu dropdown-menu-end p-0 shadow" aria-labelledby="navbar-notifications-toggle" style="width: min(22rem, calc(100vw - 2rem));">
+                            <div class="d-flex align-items-center justify-content-between px-3 py-3 border-bottom">
+                                <h2 class="h6 mb-0">Notifications</h2>
+                                <button id="notifications-mark-read" type="button" class="btn btn-link btn-sm p-0 text-decoration-none">Mark all read</button>
+                            </div>
+                            <div id="navbar-notification-list" class="overflow-auto" style="max-height: 22rem;" aria-live="polite">
+                                <div class="px-3 py-4 text-center text-muted small">Loading notifications...</div>
+                            </div>
+                        </div>
+                    </div>
+                @endif
                 <a href="{{ route('settings.profile') }}" class="profile-chip d-flex align-items-center gap-2 text-decoration-none text-reset" title="Go to profile settings">
                     <span class="profile-chip-icon" style="width: 40px; height: 40px; border-radius: 50%; overflow: hidden; display: inline-flex; align-items: center; justify-content: center; background: #f1f3f5;">
                         @if (!empty(auth()->user()?->profile_picture))
@@ -122,48 +133,68 @@
                 }
 
                 const notificationBadge = document.getElementById('navbar-notification-badge');
-                const notificationCount = document.getElementById('navbar-notification-count');
-                const notificationEndpoint = @json(route('dashboard.stats'));
-                const notificationStorageKey = 'dashboardNotificationCount';
-
-                const updateNotification = (count) => {
-                    const badgeVisible = Number(count) > 0;
-                    notificationBadge.classList.toggle('d-none', !badgeVisible);
-                    notificationCount.textContent = badgeVisible ? String(count) : '0';
-                };
-
-                const trackNewNotifications = (count) => {
-                    try {
-                        const previous = Number(window.localStorage.getItem(notificationStorageKey) || 0);
-                        if (count > previous) {
-                            notificationBadge.classList.remove('bg-secondary');
-                            notificationBadge.classList.add('bg-danger');
-                        }
-                        window.localStorage.setItem(notificationStorageKey, String(count));
-                    } catch {
-                        // ignore storage errors
-                    }
-                };
+                const notificationList = document.getElementById('navbar-notification-list');
+                const notificationEndpoint = @json(route('notifications.feed'));
+                const notificationStorageKey = 'dashboardLastReadActivityId';
+                let latestNotificationId = 0;
 
                 const refreshNotifications = async () => {
+                    if (!notificationBadge || !notificationList) return;
+
                     try {
                         const response = await fetch(notificationEndpoint, {
-                            headers: {
-                                Accept: 'application/json',
-                                'X-Requested-With': 'XMLHttpRequest',
-                            },
+                            headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
                         });
-                        if (!response.ok) {
+                        if (!response.ok) return;
+
+                        const payload = await response.json();
+                        const notifications = payload.notifications || [];
+                        latestNotificationId = Math.max(0, ...notifications.map((item) => Number(item.id) || 0));
+                        const lastReadId = Number(window.localStorage.getItem(notificationStorageKey) || 0);
+                        const unreadCount = notifications.filter((item) => Number(item.id) > lastReadId).length;
+                        notificationBadge.textContent = String(unreadCount);
+                        notificationBadge.classList.toggle('d-none', unreadCount === 0);
+                        document.getElementById('navbar-notifications-toggle')?.setAttribute(
+                            'aria-label',
+                            unreadCount ? `Notifications, ${unreadCount} unread` : 'Notifications'
+                        );
+
+                        notificationList.replaceChildren();
+                        if (!notifications.length) {
+                            const empty = document.createElement('div');
+                            empty.className = 'px-3 py-4 text-center text-muted small';
+                            empty.textContent = 'No recent activity.';
+                            notificationList.append(empty);
                             return;
                         }
-                        const payload = await response.json();
-                        const count = payload.stats?.pending_logs?.value ?? 0;
-                        updateNotification(count);
-                        trackNewNotifications(count);
+
+                        notifications.forEach((item) => {
+                            const row = document.createElement('div');
+                            row.className = 'px-3 py-3 border-bottom';
+                            const title = document.createElement('div');
+                            title.className = 'fw-semibold small';
+                            title.textContent = item.title || 'System activity';
+                            const detail = document.createElement('div');
+                            detail.className = 'text-muted small mt-1';
+                            detail.textContent = item.description || '';
+                            const time = document.createElement('div');
+                            time.className = 'text-muted small mt-1';
+                            time.textContent = item.created_at || '';
+                            row.append(title, detail, time);
+                            notificationList.append(row);
+                        });
                     } catch (error) {
                         console.warn('Unable to refresh notifications.', error);
                     }
                 };
+
+                document.getElementById('notifications-mark-read')?.addEventListener('click', () => {
+                    if (latestNotificationId) {
+                        window.localStorage.setItem(notificationStorageKey, String(latestNotificationId));
+                    }
+                    notificationBadge?.classList.add('d-none');
+                    notificationBadge.textContent = '0';
+                });
 
                 refreshNotifications();
                 window.setInterval(refreshNotifications, 10000);

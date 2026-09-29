@@ -45,13 +45,19 @@
                         </div>
                     </div>
                 </div>
-                <div class="col-lg-5">
-                    <label class="form-label text-white-50 mb-2 fw-semibold">Search driver</label>
-                    <div class="input-group input-group-lg search-driver-wrap">
-                        <span class="input-group-text bg-white border-0 text-muted"><i class="bi bi-search"></i></span>
-                        <input type="text" class="form-control border-0" placeholder="Search by name or ID">
+                @if (strcasecmp((string) auth()->user()?->role, 'administrator') === 0)
+                    <div class="col-lg-5">
+                        <label for="dashboard-driver-search" class="form-label text-white-50 mb-2 fw-semibold">Search driver</label>
+                        <div class="position-relative">
+                            <div class="input-group input-group-lg search-driver-wrap">
+                                <span class="input-group-text bg-white border-0 text-muted"><i class="bi bi-search"></i></span>
+                                <input id="dashboard-driver-search" type="search" class="form-control border-0" placeholder="Search by name or ID" autocomplete="off" role="combobox" aria-autocomplete="list" aria-controls="dashboard-driver-search-results" aria-expanded="false">
+                            </div>
+                            <div id="dashboard-driver-search-results" class="list-group position-absolute top-100 start-0 w-100 shadow mt-1 d-none" role="listbox" style="z-index: 20; max-height: 20rem; overflow-y: auto;"></div>
+                            <div id="dashboard-driver-search-status" class="small text-white-50 mt-2" role="status" aria-live="polite"></div>
+                        </div>
                     </div>
-                </div>
+                @endif
             </div>
         </div>
     </section>
@@ -122,6 +128,60 @@
         </div>
     </section>
 
+    <section class="card dashboard-card border-0 mt-4">
+        <div class="card-body p-4">
+            <div class="d-flex flex-wrap align-items-center justify-content-between gap-3 mb-3">
+                <div>
+                    <h3 class="section-title mb-1">TODA Organizations</h3>
+                    <p class="section-subtitle mb-0">Organizations registered for terminal operations.</p>
+                </div>
+                <a href="{{ route('settings.toda_organizations') }}" class="btn btn-light">Manage organizations</a>
+            </div>
+            <div class="table-responsive">
+                <table class="table driver-table align-middle mb-0">
+                    <thead><tr><th>Organization</th><th>Barangay / Travel Area</th></tr></thead>
+                    <tbody>
+                        @forelse ($organizations as $organization)
+                            <tr><td class="fw-bold">{{ $organization->name }}</td><td>{{ $organization->barangay_travel_area }}</td></tr>
+                        @empty
+                            <tr><td colspan="2" class="text-center py-4 text-muted">No organizations registered.</td></tr>
+                        @endforelse
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </section>
+
+    <section class="card dashboard-card border-0 mt-4">
+        <div class="card-body p-4">
+            <div class="d-flex flex-wrap align-items-center justify-content-between gap-3 mb-3">
+                <div>
+                    <h3 class="section-title mb-1">Recent QR Scans</h3>
+                    <p class="section-subtitle mb-0">Latest recorded driver entries and exits.</p>
+                </div>
+                <a href="{{ route('attendance') }}" class="btn btn-light">View attendance</a>
+            </div>
+            <div class="table-responsive">
+                <table class="table driver-table align-middle mb-0">
+                    <thead><tr><th>Time</th><th>Driver</th><th>Plate</th><th>Organization</th><th>Scan</th></tr></thead>
+                    <tbody>
+                        @forelse ($recentScans as $scan)
+                            <tr>
+                                <td>{{ optional($scan->scanned_at ?: $scan->created_at)->format('M j, Y H:i:s') }}</td>
+                                <td class="fw-bold">{{ $scan->driver?->name ?: 'Unknown driver' }}</td>
+                                <td>{{ $scan->driver?->vehicle_number ?: 'Unassigned' }}</td>
+                                <td>{{ $scan->driver?->organization?->name ?: 'Not assigned' }}</td>
+                                <td>{{ $scan->attendance_type ?: 'UNKNOWN' }}</td>
+                            </tr>
+                        @empty
+                            <tr><td colspan="5" class="text-center py-4 text-muted">No scans recorded yet.</td></tr>
+                        @endforelse
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </section>
+
 @endsection
 
 @push('scripts')
@@ -130,6 +190,7 @@
             const statusButtons = document.querySelectorAll('[data-duty-status]');
             const statCards = document.querySelectorAll('[data-dashboard-stat]');
             const endpoint = @json(route('dashboard.stats'));
+            const driverSearchEndpoint = @json(route('drivers.search'));
             const shiftStatusEndpoint = @json(route('dashboard.shift_status'));
             const formatter = new Intl.NumberFormat();
             const greetingElement = document.getElementById('dashboard-greeting');
@@ -137,6 +198,97 @@
             const shiftTag = document.getElementById('dashboard-shift-tag');
             const dutyStatusStorageKey = 'dashboardDutyStatus';
             const initialDutyStatus = @json($shiftStatus ?? 'Available');
+
+            const driverSearchInput = document.getElementById('dashboard-driver-search');
+            const driverSearchResults = document.getElementById('dashboard-driver-search-results');
+            const driverSearchStatus = document.getElementById('dashboard-driver-search-status');
+            let driverSearchTimer;
+            let driverSearchController;
+
+            const hideDriverSearchResults = () => {
+                driverSearchResults?.classList.add('d-none');
+                driverSearchInput?.setAttribute('aria-expanded', 'false');
+            };
+
+            const renderDriverSearchResults = (drivers) => {
+                if (!driverSearchResults) return;
+
+                driverSearchResults.replaceChildren();
+                driverSearchStatus.textContent = drivers.length ? `${drivers.length} matching driver${drivers.length === 1 ? '' : 's'}` : 'No matching drivers found.';
+
+                drivers.forEach((driver) => {
+                    const item = document.createElement('a');
+                    item.className = 'list-group-item list-group-item-action text-decoration-none';
+                    item.href = driver.url;
+                    item.setAttribute('role', 'option');
+
+                    const heading = document.createElement('div');
+                    heading.className = 'd-flex align-items-center justify-content-between gap-2';
+                    const name = document.createElement('span');
+                    name.className = 'fw-semibold';
+                    name.textContent = driver.name || 'Unnamed driver';
+                    const status = document.createElement('span');
+                    status.className = `badge ${driver.status === 'Active' ? 'text-bg-success' : 'text-bg-secondary'}`;
+                    status.textContent = driver.status || 'Unknown';
+                    heading.append(name, status);
+
+                    const details = document.createElement('div');
+                    details.className = 'small text-muted mt-1';
+                    details.textContent = [driver.driver_id, driver.vehicle_number || 'No plate', driver.organization || 'No organization'].join(' · ');
+                    item.append(heading, details);
+                    driverSearchResults.append(item);
+                });
+
+                driverSearchResults.classList.remove('d-none');
+                driverSearchInput.setAttribute('aria-expanded', 'true');
+            };
+
+            const searchDrivers = async (term) => {
+                if (!term.trim()) {
+                    driverSearchResults?.replaceChildren();
+                    driverSearchStatus.textContent = '';
+                    hideDriverSearchResults();
+                    return;
+                }
+
+                driverSearchController?.abort();
+                driverSearchController = new AbortController();
+                driverSearchStatus.textContent = 'Searching drivers...';
+
+                try {
+                    const url = new URL(driverSearchEndpoint, window.location.origin);
+                    url.searchParams.set('q', term.trim());
+                    const response = await fetch(url, {
+                        signal: driverSearchController.signal,
+                        headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+                    });
+
+                    if (!response.ok) throw new Error('Driver search request failed.');
+                    const payload = await response.json();
+                    if (driverSearchInput.value.trim() === term.trim()) {
+                        renderDriverSearchResults(payload.drivers || []);
+                    }
+                } catch (error) {
+                    if (error.name !== 'AbortError') {
+                        driverSearchStatus.textContent = 'Driver search is unavailable right now.';
+                    }
+                }
+            };
+
+            driverSearchInput?.addEventListener('input', () => {
+                window.clearTimeout(driverSearchTimer);
+                driverSearchTimer = window.setTimeout(() => searchDrivers(driverSearchInput.value), 250);
+            });
+
+            driverSearchInput?.addEventListener('keydown', (event) => {
+                if (event.key === 'Escape') hideDriverSearchResults();
+            });
+
+            document.addEventListener('click', (event) => {
+                if (!event.target.closest('#dashboard-driver-search') && !event.target.closest('#dashboard-driver-search-results')) {
+                    hideDriverSearchResults();
+                }
+            });
 
             const getGreeting = () => {
                 const hour = new Date().getHours();

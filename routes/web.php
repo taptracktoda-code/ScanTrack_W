@@ -3,9 +3,9 @@
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\AuthController;
+use App\Http\Controllers\AnalyticsController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\DriverController;
-use App\Http\Controllers\NfcScanController;
 use App\Http\Controllers\ReportController;
 use App\Http\Controllers\SettingController;
 use App\Http\Controllers\SystemHealthController;
@@ -16,8 +16,6 @@ Route::middleware('guest')->group(function () {
     Route::get('/register', [AuthController::class, 'showRegister'])->name('register');
     Route::post('/register', [AuthController::class, 'register']);
 });
-
-Route::post('/api/nfc/scan', [NfcScanController::class, 'scan'])->name('api.nfc.scan');
 
 Route::middleware('auth')->group(function () {
     Route::get('/', [DashboardController::class, 'index']);
@@ -39,17 +37,20 @@ Route::middleware('auth')->group(function () {
         Route::delete('/drivers/{driver}', [DriverController::class, 'destroy'])->name('drivers.destroy');
         Route::post('/drivers/{driver}/sms', [DriverController::class, 'sendSms'])->name('drivers.sendSms');
         Route::get('/drivers/options', [DriverController::class, 'options'])->name('drivers.options');
+        Route::get('/drivers/search', [DriverController::class, 'search'])->name('drivers.search');
+        Route::get('/notifications/feed', [DashboardController::class, 'notificationFeed'])->name('notifications.feed');
+        Route::get('/attendance', [ReportController::class, 'attendance'])->name('attendance');
+        Route::get('/terminal-activities', [ReportController::class, 'terminalActivities'])->name('terminal.activities');
+        Route::get('/analytics', [AnalyticsController::class, 'index'])->name('analytics');
+        Route::get('/analytics/export', [AnalyticsController::class, 'export'])->name('analytics.export');
     });
-    Route::redirect('/nfc', '/qr-management')->name('nfc');
     Route::get('/reports', [ReportController::class, 'index'])->name('reports');
     Route::get('/reports/export', [ReportController::class, 'export'])->name('reports.export');
     Route::get('/pending-logs', [ReportController::class, 'pendingLogs'])->name('pending.logs');
-    Route::view('/notifications', 'notifications.index')->name('notifications');
     Route::get('/vehicles', [\App\Http\Controllers\VehicleController::class, 'index'])->name('vehicles');
     Route::post('/vehicles', [\App\Http\Controllers\VehicleController::class, 'store'])->name('vehicles.store');
     Route::put('/vehicles/{vehicle}', [\App\Http\Controllers\VehicleController::class, 'update'])->name('vehicles.update');
     Route::delete('/vehicles/{vehicle}', [\App\Http\Controllers\VehicleController::class, 'destroy'])->name('vehicles.destroy');
-    Route::view('/analytics', 'analytics.index')->name('analytics');
     Route::get('/settings', [SettingController::class, 'index'])->name('settings');
     Route::get('/settings/profile', [SettingController::class, 'profile'])->name('settings.profile');
     Route::post('/settings/profile', [SettingController::class, 'updateProfile'])->name('settings.profile.update');

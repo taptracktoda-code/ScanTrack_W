@@ -2,11 +2,12 @@
     $menuItems = [
         ['label' => 'Dashboard', 'icon' => 'bi-speedometer2', 'route' => 'dashboard'],
         ['label' => 'Drivers', 'icon' => 'bi-person-badge', 'route' => 'drivers'],
-        ['label' => 'QR Management', 'icon' => 'bi-qr-code-scan', 'route' => 'qr.management'],
-        ['label' => 'Reports', 'icon' => 'bi-file-earmark-text', 'route' => 'reports'],
+        ['label' => 'Organizations', 'icon' => 'bi-buildings', 'route' => 'settings.toda_organizations'],
         ['label' => 'Vehicles', 'icon' => 'bi-truck', 'route' => 'vehicles'],
-        ['label' => 'Analytics', 'icon' => 'bi-graph-up-arrow', 'route' => 'analytics'],
-        ['label' => 'Settings', 'icon' => 'bi-gear', 'route' => 'settings.profile'],
+        ['label' => 'QR Management', 'icon' => 'bi-qr-code-scan', 'route' => 'qr.management'],
+        ['label' => 'Attendance', 'icon' => 'bi-calendar-check', 'route' => 'attendance'],
+        ['label' => 'Reports', 'icon' => 'bi-file-earmark-text', 'route' => 'reports'],
+        ['label' => 'Terminal Activities', 'icon' => 'bi-activity', 'route' => 'terminal.activities'],
     ];
 
     $userName = auth()->user()->name ?? 'Juan Dela Cruz';

@@ -10,76 +10,11 @@ use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
-use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\ValidationException;
 
 class DriverApiController extends Controller
 {
-    public function register(Request $request): JsonResponse
-    {
-        $validator = Validator::make($request->all(), [
-            'full_name' => ['required', 'string', 'max:255'],
-            'email' => ['required', 'email', 'max:255', 'unique:admins,email'],
-            'phone_number' => ['required', 'string', 'max:40'],
-            'license_number' => ['required', 'string', 'max:80'],
-            'address' => ['nullable', 'string', 'max:1000'],
-            'unit' => ['nullable', 'string', 'max:255'],
-            'password' => ['required', 'string', 'confirmed', 'min:8'],
-        ]);
-
-        if ($validator->fails()) {
-            return response()->json([
-                'success' => false,
-                'message' => 'The given data was invalid.',
-                'errors' => $validator->errors(),
-            ], 422);
-        }
-
-        $attributes = $validator->validated();
-
-        $user = DB::transaction(function () use ($attributes): User {
-            $driver = Driver::create([
-                'name' => $attributes['full_name'],
-                'license_number' => $attributes['license_number'],
-                'contact_number' => $attributes['phone_number'],
-                'vehicle_number' => null,
-                'status' => 'Active',
-            ]);
-
-            do {
-                $token = 'TT-DRV-' . strtoupper(bin2hex(random_bytes(6)));
-            } while (QrCode::where('qr_token', $token)->exists());
-
-            QrCode::create([
-                'driver_id' => $driver->id,
-                'qr_token' => $token,
-                'status' => 'Active',
-                'generated_at' => now(),
-            ]);
-
-            return User::create([
-                'name' => $attributes['full_name'],
-                'email' => $attributes['email'],
-                'password' => Hash::make($attributes['password']),
-                'role' => 'Driver',
-                'unit' => $attributes['unit'] ?? null,
-                'user_id' => 'DRIVER-' . strtoupper((string) $driver->id),
-                'license_number' => $driver->license_number,
-                'contact' => $attributes['phone_number'],
-                'address' => $attributes['address'] ?? '',
-                'status' => 'Active',
-            ]);
-        });
-
-        return response()->json([
-            'success' => true,
-            'message' => 'Driver account registered successfully.',
-            'data' => ['driver' => $this->driverData($user)],
-        ], 201);
-    }
-
     public function login(Request $request): JsonResponse
     {
         $credentials = $request->validate([

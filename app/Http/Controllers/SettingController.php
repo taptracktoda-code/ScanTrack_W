@@ -6,6 +6,7 @@ use App\Models\Setting;
 use App\Models\TodaOrganization;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\View\View;
 
 class SettingController extends Controller
@@ -44,12 +45,22 @@ class SettingController extends Controller
             'address' => $request->input('address') ?? '',
         ];
 
+        $previousPicture = $user->profile_picture;
         if ($request->hasFile('profile_picture')) {
             $path = $request->file('profile_picture')->store('profile-pictures', 'public');
+
+            if (! $path) {
+                return back()->withErrors(['profile_picture' => 'The profile picture could not be saved. Please try again.'])->withInput();
+            }
+
             $data['profile_picture'] = $path;
         }
 
         $user->forceFill($data)->save();
+
+        if (isset($data['profile_picture']) && $previousPicture && $previousPicture !== $data['profile_picture']) {
+            Storage::disk('public')->delete($previousPicture);
+        }
 
         return redirect()->route('settings.profile')->with('status', 'Profile updated successfully.');
     }

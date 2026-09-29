@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Driver;
 use App\Models\DriverLog;
+use App\Models\TerminalActivity;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
@@ -60,6 +61,37 @@ class ReportController extends Controller
         ]);
     }
 
+    public function attendance(): View
+    {
+        $records = DriverLog::with('driver.organization')
+            ->latest('scanned_at')
+            ->latest('id')
+            ->limit(250)
+            ->get();
+
+        return view('reports.activity', [
+            'title' => 'Attendance',
+            'description' => 'Driver entry and exit records from terminal QR scans.',
+            'mode' => 'attendance',
+            'records' => $records,
+        ]);
+    }
+
+    public function terminalActivities(): View
+    {
+        $records = TerminalActivity::with(['driver.organization', 'admin'])
+            ->latest()
+            ->limit(250)
+            ->get();
+
+        return view('reports.activity', [
+            'title' => 'Terminal Activities',
+            'description' => 'Recent QR scan, attendance, and driver management activity.',
+            'mode' => 'activities',
+            'records' => $records,
+        ]);
+    }
+
     public function transactionsApi(): JsonResponse
     {
         $transactions = DriverLog::with(['driver.organization'])
@@ -73,6 +105,7 @@ class ReportController extends Controller
                     'driver_name' => $log->driver?->name,
                     'organization' => $log->driver?->organization?->name,
                     'attendance_type' => $log->attendance_type,
+                    'scan_method' => $log->scan_method,
                     'terminal_id' => $log->terminal_id,
                     'status' => $log->status ?? 'completed',
                     'scanned_at' => optional($log->scanned_at ?? $log->created_at)->toIso8601String(),
@@ -121,7 +154,7 @@ class ReportController extends Controller
                 'count' => $drivers->count(),
             ],
             [
-                'title' => 'Driver Activity Report - ' . now()->format('F j, Y'),
+                'title' => 'QR Scan and Attendance Report - ' . now()->format('F j, Y'),
                 'type' => 'CSV',
                 'export_type' => 'driver-activity',
                 'count' => $driverLogs->count(),
@@ -185,7 +218,7 @@ class ReportController extends Controller
 
     private function writeDriverActivityCsv($handle): void
     {
-        fputcsv($handle, ['Log ID', 'Driver', 'Vehicle No.', 'Organization', 'Transaction', 'Terminal', 'Scanned At']);
+        fputcsv($handle, ['Log ID', 'Driver', 'Vehicle No.', 'Organization', 'Scan Type', 'Scan Method', 'Terminal', 'Scanned At']);
 
         DriverLog::latest()->chunk(100, function ($logs) use ($handle) {
             foreach ($logs as $log) {
@@ -195,6 +228,7 @@ class ReportController extends Controller
                     $log->driver?->vehicle_number ?: 'Unassigned',
                     $log->driver?->organization?->name ?: 'Not assigned',
                     $log->attendance_type ?: 'UNKNOWN',
+                    $log->scan_method ?: 'Recorded',
                     $log->terminal_id ?: 'N/A',
                     optional($log->scanned_at ?: $log->created_at)->format('Y-m-d H:i:s'),
                 ]);
