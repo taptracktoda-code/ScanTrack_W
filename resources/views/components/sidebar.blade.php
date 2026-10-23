@@ -1,14 +1,26 @@
 @php
-    $menuItems = [
+    $menuItems = auth()->user()?->isManager()
+        ? [
+            ['label' => 'Dashboard', 'icon' => 'bi-speedometer2', 'route' => 'manager.dashboard'],
+            ['label' => 'Drivers', 'icon' => 'bi-person-badge', 'route' => 'manager.drivers'],
+            ['label' => 'Vehicles', 'icon' => 'bi-truck', 'route' => 'manager.vehicles'],
+            ['label' => 'QR Management', 'icon' => 'bi-qr-code-scan', 'route' => 'manager.qr.management'],
+            ['label' => 'Attendance', 'icon' => 'bi-calendar-check', 'route' => 'manager.attendance'],
+            ['label' => 'Reports', 'icon' => 'bi-file-earmark-text', 'route' => 'manager.reports'],
+            ['label' => 'Organization', 'icon' => 'bi-buildings', 'route' => 'manager.organization'],
+        ]
+        : [
         ['label' => 'Dashboard', 'icon' => 'bi-speedometer2', 'route' => 'dashboard'],
         ['label' => 'Drivers', 'icon' => 'bi-person-badge', 'route' => 'drivers'],
+        ['label' => 'Managers', 'icon' => 'bi-people', 'route' => 'managers'],
+        ['label' => 'Queue Monitoring', 'icon' => 'bi-list-ol', 'route' => 'queues.monitoring'],
         ['label' => 'Organizations', 'icon' => 'bi-buildings', 'route' => 'settings.toda_organizations'],
         ['label' => 'Vehicles', 'icon' => 'bi-truck', 'route' => 'vehicles'],
         ['label' => 'QR Management', 'icon' => 'bi-qr-code-scan', 'route' => 'qr.management'],
         ['label' => 'Attendance', 'icon' => 'bi-calendar-check', 'route' => 'attendance'],
         ['label' => 'Reports', 'icon' => 'bi-file-earmark-text', 'route' => 'reports'],
         ['label' => 'Terminal Activities', 'icon' => 'bi-activity', 'route' => 'terminal.activities'],
-    ];
+        ];
 
     $userName = auth()->user()->name ?? 'Juan Dela Cruz';
 @endphp

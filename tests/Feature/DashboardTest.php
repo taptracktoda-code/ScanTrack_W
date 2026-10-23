@@ -14,6 +14,7 @@ class DashboardTest extends TestCase
     public function test_dashboard_displays_registered_toda_organizations(): void
     {
         $user = User::factory()->create([
+            'role' => 'SUPER_ADMIN',
             'user_id' => 'USER-001',
             'license_number' => 'LIC-001',
             'contact' => '09170000001',
@@ -30,11 +31,15 @@ class DashboardTest extends TestCase
         $response->assertOk();
         $response->assertSee($organization->name);
         $response->assertSee($organization->barangay_travel_area);
+        $response->assertSee('profile-chip');
+        $response->assertDontSee('aria-label="Send SMS"');
+        $response->assertDontSee('sendSmsModal');
     }
 
-    public function test_dashboard_can_update_and_persist_shift_status(): void
+    public function test_dashboard_does_not_display_daily_shift_status(): void
     {
         $user = User::factory()->create([
+            'role' => 'SUPER_ADMIN',
             'user_id' => 'USER-001',
             'license_number' => 'LIC-001',
             'contact' => '09170000001',
@@ -42,18 +47,33 @@ class DashboardTest extends TestCase
             'status' => 'Active',
         ]);
 
-        $response = $this->actingAs($user)
-            ->post(route('dashboard.shift_status'), ['shift_status' => 'On Break']);
+        $response = $this->actingAs($user)->get(route('dashboard'));
 
-        $response->assertOk();
+        $response->assertOk()
+            ->assertDontSee('Duty Status')
+            ->assertDontSee('data-duty-status')
+            ->assertDontSee('dashboard-shift-badge');
         $this->assertDatabaseHas('admins', [
             'id' => $user->id,
-            'shift_status' => 'On Break',
+            'shift_status' => 'Available',
+        ]);
+        $this->assertSame('Available', $user->fresh()->shift_status);
+        $this->post('/dashboard/shift-status', ['shift_status' => 'Off Duty'])
+            ->assertNotFound();
+    }
+
+    public function test_dashboard_does_not_show_driver_verification_or_pending_driver_stats(): void
+    {
+        $user = User::factory()->create([
+            'role' => 'SUPER_ADMIN',
+            'status' => 'Active',
         ]);
 
-        $dashboard = $this->actingAs($user)->get('/dashboard');
-        $dashboard->assertOk();
-        $dashboard->assertSee('On Break');
-        $dashboard->assertSee('Duty shift paused');
+        $response = $this->actingAs($user)->get(route('dashboard'));
+
+        $response->assertOk()
+            ->assertDontSee('Pending Driver Verification')
+            ->assertDontSee('Driver Verification')
+            ->assertViewHas('stats', fn (array $stats): bool => ! array_key_exists('pending_drivers', $stats));
     }
 }

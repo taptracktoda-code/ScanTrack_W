@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\Driver;
+use App\Models\TodaOrganization;
 use App\Models\User;
 use App\Models\Vehicle;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -15,6 +16,7 @@ class VehicleTest extends TestCase
     public function test_vehicle_page_lists_registered_vehicles(): void
     {
         $user = User::factory()->create([
+            'role' => 'Administrator',
             'user_id' => 'USER-100',
             'license_number' => 'LIC-100',
             'contact' => '09170000000',
@@ -35,7 +37,7 @@ class VehicleTest extends TestCase
         $response->assertSee($vehicle->plate_number);
     }
 
-    public function test_driver_registration_creates_a_vehicle_record_when_vehicle_number_is_provided(): void
+    public function test_legacy_direct_driver_creation_route_is_not_exposed(): void
     {
         $user = User::factory()->create([
             'role' => 'Administrator',
@@ -46,22 +48,54 @@ class VehicleTest extends TestCase
             'status' => 'Active',
         ]);
 
-        $response = $this->actingAs($user)->post(route('drivers.store'), [
+        $this->actingAs($user)->post('/drivers', [
             'name' => 'Rico Santos',
             'license_number' => 'LIC-200-1',
             'contact_number' => '09170000001',
             'vehicle_number' => 'XYZ-789',
             'status' => 'Active',
-        ]);
+        ])->assertMethodNotAllowed();
+        $this->assertDatabaseMissing('drivers', ['name' => 'Rico Santos']);
+    }
 
-        $response->assertRedirect(route('drivers'));
-        $this->assertDatabaseHas('vehicles', [
+    public function test_vehicle_edit_keeps_driver_assignment_and_organization_in_sync(): void
+    {
+        $admin = User::factory()->create(['role' => 'SUPER_ADMIN']);
+        $organization = TodaOrganization::create([
+            'name' => 'Central TODA',
+            'barangay_travel_area' => 'Central Area',
+        ]);
+        $driver = Driver::create([
+            'name' => 'Rico Santos',
+            'license_number' => 'LIC-VEHICLE-1',
+            'contact_number' => '09170000001',
+            'vehicle_number' => 'XYZ-789',
+            'status' => 'Active',
+        ]);
+        $vehicle = Vehicle::create([
+            'name' => 'Tricycle 1',
             'plate_number' => 'XYZ-789',
             'status' => 'Active',
         ]);
+
+        $this->actingAs($admin)->put(route('vehicles.update', $vehicle), [
+            'name' => 'Tricycle 1 Updated',
+            'plate_number' => 'XYZ-790',
+            'vehicle_type' => 'Tricycle',
+            'organization_id' => $organization->id,
+            'status' => 'Active',
+        ])->assertRedirect(route('vehicles'));
+
+        $this->assertDatabaseHas('vehicles', [
+            'id' => $vehicle->id,
+            'plate_number' => 'XYZ-790',
+            'vehicle_type' => 'Tricycle',
+            'organization_id' => $organization->id,
+        ]);
         $this->assertDatabaseHas('drivers', [
-            'name' => 'Rico Santos',
-            'vehicle_number' => 'XYZ-789',
+            'id' => $driver->id,
+            'vehicle_number' => 'XYZ-790',
+            'organization_id' => $organization->id,
         ]);
     }
 }

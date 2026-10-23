@@ -10,7 +10,11 @@ class EnsureAdmin
 {
     public function handle(Request $request, Closure $next): Response
     {
-        abort_unless($request->user() && strcasecmp((string) $request->user()->role, 'administrator') === 0, 403);
+        abort_unless(
+            $request->user()?->isSuperAdmin()
+            && strcasecmp((string) $request->user()->status, 'Active') === 0,
+            403
+        );
 
         return $next($request);
     }

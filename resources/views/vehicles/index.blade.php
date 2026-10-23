@@ -20,9 +20,13 @@
                 <table class="table table-hover align-middle mb-0">
                         <thead>
                         <tr>
-                            <th>Name</th>
+                            <th>Vehicle / Model</th>
                             <th>Plate Number</th>
+                            <th>Type</th>
+                            <th>Driver</th>
+                            <th>Organization</th>
                             <th>Status</th>
+                            <th>Registered</th>
                             <th class="text-end">Actions</th>
                         </tr>
                     </thead>
@@ -31,7 +35,11 @@
                             <tr>
                                 <td>{{ $vehicle->name }}</td>
                                 <td>{{ $vehicle->plate_number }}</td>
+                                <td>{{ $vehicle->vehicle_type ?: '—' }}</td>
+                                <td>{{ $vehicle->driver?->name ?: 'Unassigned' }}</td>
+                                <td>{{ $vehicle->organization?->name ?: 'Unassigned' }}</td>
                                 <td>{{ $vehicle->status }}</td>
+                                <td>{{ $vehicle->created_at?->format('M j, Y') }}</td>
                                 <td>
                                     <div class="d-flex justify-content-end gap-2">
                                         <button
@@ -76,6 +84,19 @@
                                                     <input type="text" name="plate_number" class="form-control" value="{{ old('plate_number', $vehicle->plate_number) }}" required>
                                                 </div>
                                                 <div class="mb-3">
+                                                    <label class="form-label">Vehicle Type</label>
+                                                    <input type="text" name="vehicle_type" class="form-control" value="{{ old('vehicle_type', $vehicle->vehicle_type) }}" maxlength="80">
+                                                </div>
+                                                <div class="mb-3">
+                                                    <label class="form-label">Organization</label>
+                                                    <select name="organization_id" class="form-select">
+                                                        <option value="">Unassigned</option>
+                                                        @foreach ($organizations as $organization)
+                                                            <option value="{{ $organization->id }}" @selected(old('organization_id', $vehicle->organization_id) == $organization->id)>{{ $organization->name }}</option>
+                                                        @endforeach
+                                                    </select>
+                                                </div>
+                                                <div class="mb-3">
                                                     <label class="form-label">Status</label>
                                                     <select name="status" class="form-select">
                                                         <option value="Active" {{ old('status', $vehicle->status) === 'Active' ? 'selected' : '' }}>Active</option>
@@ -93,7 +114,7 @@
                             </div>
                         @empty
                             <tr>
-                                <td colspan="3" class="text-center text-muted py-4">No vehicles have been registered yet.</td>
+                                <td colspan="8" class="text-center text-muted py-4">No vehicles have been registered yet.</td>
                             </tr>
                         @endforelse
                     </tbody>
@@ -126,6 +147,21 @@
                             @error('plate_number')
                                 <div class="invalid-feedback">{{ $message }}</div>
                             @enderror
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Vehicle Type</label>
+                            <input type="text" name="vehicle_type" class="form-control @error('vehicle_type') is-invalid @enderror" value="{{ old('vehicle_type') }}" maxlength="80">
+                            @error('vehicle_type')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Organization</label>
+                            <select name="organization_id" class="form-select @error('organization_id') is-invalid @enderror">
+                                <option value="">Unassigned</option>
+                                @foreach ($organizations as $organization)
+                                    <option value="{{ $organization->id }}" @selected(old('organization_id') == $organization->id)>{{ $organization->name }}</option>
+                                @endforeach
+                            </select>
+                            @error('organization_id')<div class="invalid-feedback">{{ $message }}</div>@enderror
                         </div>
                         <div class="mb-3">
                             <label class="form-label">Status</label>

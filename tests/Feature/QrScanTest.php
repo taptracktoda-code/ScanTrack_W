@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\Driver;
+use App\Models\DriverLog;
 use App\Models\QrCode;
 use App\Models\TodaOrganization;
 use App\Models\User;
@@ -57,6 +58,68 @@ class QrScanTest extends TestCase
             ->assertStatus(422)->assertJsonPath('message', 'Duplicate scan detected.');
     }
 
+    public function test_first_scan_of_the_day_checks_driver_in_even_if_previous_day_ended_with_entry(): void
+    {
+        [$admin, $qrCode] = $this->driverFixture();
+        $yesterday = now()->subDay()->setTime(17, 0);
+        DriverLog::create([
+            'driver_id' => $qrCode->driver_id,
+            'attendance_type' => 'ENTRY',
+            'scan_method' => 'QR',
+            'scanned_at' => $yesterday,
+            'created_at' => $yesterday,
+            'updated_at' => $yesterday,
+        ]);
+
+        $response = $this->withToken($admin->createToken('next-day-scan')->plainTextToken)
+            ->postJson('/api/admin/qr/scan', ['qr_identifier' => $qrCode->qr_token]);
+
+        $response->assertOk()->assertJsonPath('transaction_type', 'ENTRY');
+        $this->assertTrue(DriverLog::query()
+            ->where('driver_id', $qrCode->driver_id)
+            ->whereDate('created_at', now()->toDateString())
+            ->where('attendance_type', 'ENTRY')
+            ->exists());
+
+        $driverAccount = User::factory()->create([
+            'role' => 'Driver',
+            'status' => 'Active',
+            'user_id' => 'DRIVER-' . $qrCode->driver_id,
+            'must_change_password' => false,
+        ]);
+        $this->actingAs($driverAccount, 'sanctum')
+            ->getJson('/api/driver/attendance/today')
+            ->assertOk()
+            ->assertJsonPath('data.status', 'active')
+            ->assertJsonPath('data.exit_time', null);
+    }
+
+    public function test_driver_can_view_monthly_attendance(): void
+    {
+        [, $qrCode] = $this->driverFixture();
+        $driverAccount = User::factory()->create([
+            'role' => 'Driver',
+            'status' => 'Active',
+            'user_id' => 'DRIVER-' . $qrCode->driver_id,
+            'must_change_password' => false,
+        ]);
+
+        DriverLog::create([
+            'driver_id' => $qrCode->driver_id,
+            'attendance_type' => 'ENTRY',
+            'scan_method' => 'QR',
+            'scanned_at' => now(),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $this->actingAs($driverAccount, 'sanctum')
+            ->getJson('/api/driver/attendance/monthly?year=' . now()->year . '&month=' . now()->month)
+            ->assertOk()
+            ->assertJsonPath('success', true)
+            ->assertJsonPath('data.present_days', 1);
+    }
+
     public function test_qr_scan_requires_an_authenticated_administrator(): void
     {
         [, $qrCode] = $this->driverFixture();
@@ -99,7 +162,7 @@ class QrScanTest extends TestCase
     private function driverFixture(): array
     {
         $admin = User::factory()->create(['role' => 'Administrator']);
-        $organization = TodaOrganization::create(['name' => 'North TODA', 'barangay_travel_area' => 'North Area']);
+        $organization = TodaOrganization::create(['name' => 'North TODA', 'barangay_travel_area' => 'North Area', 'status' => 'Active']);
         $driver = Driver::create(['name' => 'Juan Dela Cruz', 'license_number' => 'LIC-QR-1', 'contact_number' => '09170000000', 'vehicle_number' => 'ABC-1234', 'status' => 'Active', 'organization_id' => $organization->id]);
         Vehicle::create(['name' => $driver->name, 'plate_number' => 'ABC-1234', 'vehicle_type' => 'Tricycle', 'status' => 'Active']);
         $qrCode = QrCode::create(['driver_id' => $driver->id, 'qr_token' => 'TT-QR-TEST-001', 'status' => 'Active', 'generated_at' => now()]);

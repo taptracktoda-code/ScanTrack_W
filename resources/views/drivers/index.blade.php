@@ -11,15 +11,9 @@
     @endphp
 
     <section class="dashboard-hero driver-hero mb-4">
-        <div class="d-flex flex-wrap align-items-start justify-content-between gap-3">
-            <div>
-                <h1 class="h3 mb-1">Drivers</h1>
-                <p class="mb-0 text-muted">Manage driver accounts, vehicles, and assignments.</p>
-            </div>
-            <button class="btn btn-primary" type="button" data-bs-toggle="modal" data-bs-target="#driverCreateModal">
-                <i class="bi bi-person-plus-fill me-2" aria-hidden="true"></i>
-                Add New Driver
-            </button>
+        <div>
+            <h1 class="h3 mb-1">Drivers</h1>
+            <p class="mb-0 text-muted">Manage driver accounts, vehicles, and assignments.</p>
         </div>
     </section>
 

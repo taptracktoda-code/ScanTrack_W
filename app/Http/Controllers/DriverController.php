@@ -135,8 +135,7 @@ class DriverController extends Controller
             'organization_id' => ['required', 'exists:toda_organizations,id'],
         ]);
 
-        $temporaryPassword = Str::password(16, letters: true, numbers: true, symbols: true);
-        $driver = DB::transaction(function () use ($attributes, $temporaryPassword): Driver {
+        $driver = DB::transaction(function () use ($attributes): Driver {
             $name = trim(implode(' ', array_filter([$attributes['first_name'], $attributes['middle_name'] ?? null, $attributes['last_name']])));
             $driver = Driver::create([
                 'name' => $name,
@@ -149,54 +148,47 @@ class DriverController extends Controller
                 'address' => $attributes['address'],
                 'vehicle_number' => $attributes['plate_number'],
                 'organization_id' => $attributes['organization_id'],
-                'status' => 'Active',
+                'registered_by' => auth()->id(),
+                'status' => 'Pending',
             ]);
 
             Vehicle::create([
                 'name' => $name,
                 'plate_number' => $attributes['plate_number'],
                 'vehicle_type' => $attributes['vehicle_type'],
-                'status' => 'Active',
+                'organization_id' => $attributes['organization_id'],
+                'status' => 'Pending',
             ]);
 
             User::create([
                 'name' => $name,
                 'email' => $attributes['email'],
-                'password' => Hash::make($temporaryPassword),
-                'role' => 'Driver',
+                'password' => Hash::make(Str::random(64)),
+                'role' => User::ROLE_DRIVER,
                 'user_id' => 'DRIVER-' . strtoupper((string) $driver->id),
                 'license_number' => $driver->license_number,
                 'contact' => $driver->contact_number,
                 'address' => $driver->address,
-                'status' => 'Active',
+                'status' => 'Pending',
                 'must_change_password' => true,
             ]);
 
-            $this->issueQrCode($driver);
             TerminalActivity::create([
                 'admin_id' => auth()->id(),
                 'driver_id' => $driver->id,
                 'activity' => 'Driver registered',
-                'description' => 'Driver account and QR code created',
+                'description' => 'Driver registration submitted for Super Admin verification',
             ]);
 
             return $driver;
         });
 
-        try {
-            Mail::to($attributes['email'])
-                ->bcc(config('mail.from.address'))
-                ->send(new DriverAccountCreatedMail($driver, $attributes['email'], $temporaryPassword));
-        } catch (\Throwable $exception) {
-            report($exception);
-            return redirect()->route('drivers')->with('status', 'Driver registered successfully with an active QR code, but the email could not be sent. Please check the mail configuration or resend the credentials.');
-        }
-
-        return redirect()->route('drivers')->with('status', 'Driver registered successfully with an active QR code. Login credentials have been sent to the driver\'s email.');
+        return redirect()->route('drivers.verification')->with('status', 'Driver registration submitted for Super Admin verification. Credentials will be sent after approval.');
     }
 
     public function resendCredentials(Driver $driver): RedirectResponse
     {
+        abort_unless(strcasecmp((string) $driver->status, 'Active') === 0, 409);
         $user = User::where('user_id', 'DRIVER-' . strtoupper((string) $driver->id))->firstOrFail();
         $temporaryPassword = Str::password(16, letters: true, numbers: true, symbols: true);
         $user->forceFill(['password' => Hash::make($temporaryPassword), 'must_change_password' => true])->save();
@@ -213,26 +205,13 @@ class DriverController extends Controller
         return redirect()->route('drivers')->with('status', 'A new temporary password was sent to the driver\'s email.');
     }
 
-    public function store(Request $request): RedirectResponse
-    {
-        $validated = $this->validatedDriver($request);
-
-        if (!empty($validated['vehicle_number'])) {
-            Vehicle::firstOrCreate(
-                ['plate_number' => $validated['vehicle_number']],
-                ['name' => $validated['vehicle_number'], 'status' => 'Active']
-            );
-        }
-
-        $driver = Driver::create($validated);
-        $this->issueQrCode($driver);
-
-        return redirect()->route('drivers')->with('status', 'Driver added successfully.');
-    }
-
     public function update(Request $request, Driver $driver): RedirectResponse
     {
-        $driver->update($this->validatedDriver($request));
+        $attributes = $this->validatedDriver($request);
+        if (strcasecmp((string) $driver->status, 'Pending') === 0 && $attributes['status'] !== 'Pending') {
+            return back()->withErrors(['status' => 'Pending drivers can only be activated through Driver Verification.'])->withInput();
+        }
+        $driver->update($attributes);
 
         return redirect()->route('drivers')->with('status', 'Driver updated successfully.');
     }
@@ -361,7 +340,7 @@ class DriverController extends Controller
             'license_number' => ['required', 'string', 'max:80'],
             'contact_number' => ['required', 'string', 'max:40'],
             'vehicle_number' => ['nullable', 'string', 'max:80'],
-            'status' => ['required', 'in:Active,Suspended'],
+            'status' => ['required', 'in:Pending,Active,Inactive,Suspended'],
         ]);
     }
 

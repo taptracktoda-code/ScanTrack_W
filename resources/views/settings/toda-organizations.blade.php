@@ -47,6 +47,21 @@
                                     <div class="invalid-feedback">{{ $message }}</div>
                                 @enderror
                             </div>
+                            <div class="col-12 col-lg-6">
+                                <label for="organization-address" class="form-label">Address</label>
+                                <input id="organization-address" name="address" value="{{ old('address') }}" class="form-control @error('address') is-invalid @enderror">
+                                @error('address')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                            </div>
+                            <div class="col-12 col-lg-6">
+                                <label for="organization-contact" class="form-label">Contact Number</label>
+                                <input id="organization-contact" name="contact_number" value="{{ old('contact_number') }}" class="form-control @error('contact_number') is-invalid @enderror">
+                                @error('contact_number')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                            </div>
+                            <div class="col-12 col-lg-6">
+                                <label for="organization-email" class="form-label">Email</label>
+                                <input id="organization-email" name="email" type="email" value="{{ old('email') }}" class="form-control @error('email') is-invalid @enderror">
+                                @error('email')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                            </div>
                         </div>
 
                         <div class="mt-4 d-flex flex-wrap gap-2">
@@ -64,20 +79,38 @@
                             <th class="border-top-0">#</th>
                             <th class="border-top-0">Organization Name</th>
                             <th class="border-top-0">Barangay Travel Area</th>
+                            <th class="border-top-0">Contact</th>
+                            <th class="border-top-0">Email</th>
+                            <th class="border-top-0">Managers</th>
+                            <th class="border-top-0">Drivers</th>
+                            <th class="border-top-0">Vehicles</th>
+                            <th class="border-top-0">Status</th>
                             <th class="border-top-0">Created</th>
+                            <th class="border-top-0 text-end">Actions</th>
                         </tr>
                     </thead>
                     <tbody>
                         @forelse ($organizations as $organization)
                             <tr>
                                 <td>{{ $loop->iteration }}</td>
-                                <td>{{ $organization->name }}</td>
-                                <td>{{ $organization->barangay_travel_area }}</td>
+                                <form id="organization-update-{{ $organization->id }}" method="POST" action="{{ route('settings.toda_organizations.organizations.update', $organization) }}">@csrf @method('PUT')</form>
+                                <td><input form="organization-update-{{ $organization->id }}" name="name" value="{{ $organization->name }}" class="form-control form-control-sm" aria-label="Organization name" required></td>
+                                <td><input form="organization-update-{{ $organization->id }}" name="barangay_travel_area" value="{{ $organization->barangay_travel_area }}" class="form-control form-control-sm" aria-label="Travel area" required></td>
+                                <td><input form="organization-update-{{ $organization->id }}" name="contact_number" value="{{ $organization->contact_number }}" class="form-control form-control-sm" aria-label="Organization contact"></td>
+                                <td><input form="organization-update-{{ $organization->id }}" name="email" type="email" value="{{ $organization->email }}" class="form-control form-control-sm" aria-label="Organization email"></td>
+                                <td>{{ $organization->managers_count }}</td>
+                                <td>{{ $organization->drivers_count }}</td>
+                                <td>{{ $organization->vehicles_count }}</td>
+                                <td><span class="badge {{ strcasecmp((string) $organization->status, 'Active') === 0 ? 'text-bg-success' : 'text-bg-secondary' }}">{{ $organization->status }}</span></td>
                                 <td>{{ $organization->created_at->format('M j, Y') }}</td>
+                                <td class="text-end text-nowrap">
+                                    <button form="organization-update-{{ $organization->id }}" class="btn btn-sm btn-outline-primary" title="Save organization" aria-label="Save organization"><i class="bi bi-check-lg"></i></button>
+                                    <form method="POST" action="{{ route('settings.toda_organizations.organizations.status', $organization) }}" class="d-inline">@csrf<button class="btn btn-sm btn-outline-secondary" title="Toggle organization status" aria-label="Toggle organization status"><i class="bi bi-toggle-on"></i></button></form>
+                                </td>
                             </tr>
                         @empty
                             <tr>
-                                <td colspan="4" class="text-center text-muted py-4">No TODA organizations have been added yet.</td>
+                                <td colspan="10" class="text-center text-muted py-4">No TODA organizations have been added yet.</td>
                             </tr>
                         @endforelse
                     </tbody>

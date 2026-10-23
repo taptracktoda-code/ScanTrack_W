@@ -1,15 +1,18 @@
 <x-mail::message>
 # Hello {{ $driver->name }}
 
-Your Tap Track driver account has been created by the administrator.
+Your ScanTrack driver account has been created and activated by your organization manager.
 
 **Login email:** {{ $email }}  
 **Temporary password:** {{ $temporaryPassword }}
 
-Please use these credentials to log in to the Tap Track driver application. For security, you will be required to change this password after your first login.
+**Organization:** {{ $driver->organization?->name ?? 'ScanTrack' }}
+
+Log in to the ScanTrack Mobile App with these credentials. You must change this temporary password immediately after your first login.
 
 If you did not expect this account, please contact the Tap Track administrator.
 
-Thank you,  
-Tap Track Administration
+Thanks,
+
+ScanTrack Administration
 </x-mail::message>

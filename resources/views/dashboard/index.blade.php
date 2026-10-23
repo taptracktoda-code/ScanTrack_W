@@ -21,10 +21,6 @@
         <div class="card-body p-3 p-lg-4">
             <div class="row align-items-start g-2 g-lg-3">
                 <div class="col-lg-7">
-                    <div class="d-flex flex-wrap align-items-center gap-2 mb-1">
-                        <span id="dashboard-shift-badge" class="badge rounded-pill text-bg-success status-badge">{{ $shiftStatus ?? 'Available' }}</span>
-                        <span id="dashboard-shift-tag" class="welcome-tag">{{ $shiftStatus === 'Available' ? 'Duty shift in progress' : ($shiftStatus === 'On Break' ? 'Duty shift paused' : 'Duty shift inactive') }}</span>
-                    </div>
                     <p class="welcome-eyebrow mb-0" id="dashboard-greeting">{{ now()->hour < 12 ? 'Good morning,' : (now()->hour < 18 ? 'Good afternoon,' : 'Good evening,') }}</p>
                     <h2 class="welcome-name mb-0">{{ auth()->user()->name ?? 'Juan Dela Cruz' }}</h2>
                     <p class="welcome-meta mb-1">
@@ -37,7 +33,7 @@
                     <div class="welcome-summary d-flex flex-wrap gap-2">
                         <div>
                             <div class="summary-label">Active Drivers</div>
-                            <div class="summary-value" data-dashboard-summary="drivers">{{ number_format($stats['drivers']['value']) }}</div>
+                            <div class="summary-value" data-dashboard-summary="active_drivers">{{ number_format($stats['active_drivers']['value']) }}</div>
                         </div>
                         <div>
                             <div class="summary-label">Pending Logs</div>
@@ -45,7 +41,7 @@
                         </div>
                     </div>
                 </div>
-                @if (strcasecmp((string) auth()->user()?->role, 'administrator') === 0)
+                @if (auth()->user()?->isSuperAdmin())
                     <div class="col-lg-5">
                         <label for="dashboard-driver-search" class="form-label text-white-50 mb-2 fw-semibold">Search driver</label>
                         <div class="position-relative">
@@ -62,28 +58,6 @@
         </div>
     </section>
 
-    <section class="card dashboard-card border-0 mt-4">
-        <div class="card-body p-4">
-            <div class="d-flex flex-wrap align-items-center justify-content-between gap-3">
-                <div>
-                    <h3 class="section-title mb-1">Duty Status</h3>
-                    <p class="section-subtitle mb-0">Track the current status of drivers on shift at a glance.</p>
-                </div>
-
-                <a href="{{ route('pending.logs') }}" class="btn btn-add-driver">
-                    <i class="bi bi-person-plus me-2"></i>
-                    Pending Accounts
-                </a>
-            </div>
-
-            <div class="d-flex flex-wrap gap-2 mt-4">
-                <button class="btn status-pill active" type="button" data-duty-status="Available">Available</button>
-                <button class="btn status-pill" type="button" data-duty-status="On Break">On Break</button>
-                <button class="btn status-pill" type="button" data-duty-status="Off Duty">Off Duty</button>
-            </div>
-        </div>
-    </section>
-
     <section class="mt-4">
         <div class="row g-3 g-xl-4">
             @php
@@ -91,6 +65,8 @@
                     'organizations' => route('settings.toda_organizations'),
                     'vehicles' => route('vehicles'),
                     'drivers' => route('drivers'),
+                    'active_drivers' => route('drivers'),
+                    'managers' => route('managers'),
                     'driver_logs_today' => route('pending.logs'),
                 ];
             @endphp
@@ -182,22 +158,45 @@
         </div>
     </section>
 
+    <section class="card dashboard-card border-0 mt-4">
+        <div class="card-body p-4">
+            <div class="d-flex flex-wrap align-items-center justify-content-between gap-3 mb-3">
+                <div>
+                    <h3 class="section-title mb-1">Recent System Activity</h3>
+                    <p class="section-subtitle mb-0">Account, verification, and terminal events across the system.</p>
+                </div>
+                <a href="{{ route('terminal.activities') }}" class="btn btn-light">View activity log</a>
+            </div>
+            <div class="table-responsive">
+                <table class="table driver-table align-middle mb-0">
+                    <thead><tr><th>Time</th><th>Activity</th><th>Account</th><th>Details</th></tr></thead>
+                    <tbody>
+                        @forelse ($recentActivities as $activity)
+                            <tr>
+                                <td>{{ $activity->created_at?->diffForHumans() }}</td>
+                                <td class="fw-bold">{{ $activity->activity }}</td>
+                                <td>{{ $activity->driver?->name ?? $activity->admin?->name ?? 'System' }}</td>
+                                <td>{{ $activity->description ?: '—' }}</td>
+                            </tr>
+                        @empty
+                            <tr><td colspan="4" class="text-center py-4 text-muted">No system activity recorded yet.</td></tr>
+                        @endforelse
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </section>
+
 @endsection
 
 @push('scripts')
     <script>
         (() => {
-            const statusButtons = document.querySelectorAll('[data-duty-status]');
             const statCards = document.querySelectorAll('[data-dashboard-stat]');
             const endpoint = @json(route('dashboard.stats'));
             const driverSearchEndpoint = @json(route('drivers.search'));
-            const shiftStatusEndpoint = @json(route('dashboard.shift_status'));
             const formatter = new Intl.NumberFormat();
             const greetingElement = document.getElementById('dashboard-greeting');
-            const shiftBadge = document.getElementById('dashboard-shift-badge');
-            const shiftTag = document.getElementById('dashboard-shift-tag');
-            const dutyStatusStorageKey = 'dashboardDutyStatus';
-            const initialDutyStatus = @json($shiftStatus ?? 'Available');
 
             const driverSearchInput = document.getElementById('dashboard-driver-search');
             const driverSearchResults = document.getElementById('dashboard-driver-search-results');
@@ -310,45 +309,6 @@
                 }
             };
 
-            const updateShiftDisplay = (status) => {
-                if (!shiftBadge) {
-                    return;
-                }
-
-                shiftBadge.textContent = status;
-                shiftBadge.className = 'badge rounded-pill status-badge';
-
-                if (status === 'Available') {
-                    shiftBadge.classList.add('text-bg-success');
-                } else if (status === 'On Break') {
-                    shiftBadge.classList.add('text-bg-warning');
-                } else {
-                    shiftBadge.classList.add('text-bg-danger');
-                }
-
-                if (shiftTag) {
-                    shiftTag.textContent = status === 'Available'
-                        ? 'Duty shift in progress'
-                        : status === 'On Break'
-                            ? 'Duty shift paused'
-                            : 'Duty shift inactive';
-                }
-            };
-
-            const setDutyStatus = (status) => {
-                statusButtons.forEach((button) => {
-                    button.classList.toggle('active', button.dataset.dutyStatus === status);
-                });
-
-                updateShiftDisplay(status);
-
-                try {
-                    window.localStorage.setItem(dutyStatusStorageKey, status);
-                } catch {
-                    // ignore storage errors
-                }
-            };
-
             const updateValue = (element, value) => {
                 if (!element) {
                     return;
@@ -385,33 +345,6 @@
             };
 
             updateGreeting();
-
-            if (statusButtons.length) {
-                const selectedStatus = window.localStorage.getItem(dutyStatusStorageKey) || initialDutyStatus;
-                setDutyStatus(selectedStatus);
-
-                statusButtons.forEach((button) => {
-                    button.addEventListener('click', async () => {
-                        const selected = button.dataset.dutyStatus;
-                        setDutyStatus(selected);
-
-                        try {
-                            const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content;
-                            await fetch(shiftStatusEndpoint, {
-                                method: 'POST',
-                                headers: {
-                                    'Content-Type': 'application/json',
-                                    Accept: 'application/json',
-                                    'X-CSRF-TOKEN': csrfToken || '',
-                                },
-                                body: JSON.stringify({ shift_status: selected }),
-                            });
-                        } catch (error) {
-                            console.warn('Unable to save shift status.', error);
-                        }
-                    });
-                });
-            }
 
             if (statCards.length) {
                 refreshDashboardStats();

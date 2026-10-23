@@ -71,7 +71,7 @@ class SettingController extends Controller
             'value' => (int) Setting::getValue('toda_organizations', 15),
             'toda_name' => Setting::getValue('toda_name', ''),
             'barangay_travel_area' => Setting::getValue('barangay_travel_area', ''),
-            'organizations' => TodaOrganization::orderBy('created_at', 'desc')->get(),
+            'organizations' => TodaOrganization::withCount(['managers', 'drivers', 'vehicles'])->orderBy('created_at', 'desc')->get(),
         ]);
     }
 
@@ -80,18 +80,48 @@ class SettingController extends Controller
         $request->validate([
             'name' => ['required', 'string', 'max:255'],
             'barangay_travel_area' => ['required', 'string', 'max:255'],
+            'address' => ['nullable', 'string', 'max:255'],
+            'contact_number' => ['nullable', 'string', 'max:40'],
+            'email' => ['nullable', 'email', 'max:255'],
         ]);
 
-        if (auth()->user()->role !== 'Administrator') {
+        if (! auth()->user()->isSuperAdmin()) {
             abort(403);
         }
 
         TodaOrganization::create([
             'name' => $request->input('name'),
             'barangay_travel_area' => $request->input('barangay_travel_area'),
+            'address' => $request->input('address'),
+            'contact_number' => $request->input('contact_number'),
+            'email' => $request->input('email'),
+            'status' => 'Active',
         ]);
 
         return redirect()->route('settings.toda_organizations')
             ->with('status', 'Organization added successfully.');
+    }
+
+    public function updateTodaOrganization(Request $request, TodaOrganization $organization): RedirectResponse
+    {
+        $attributes = $request->validate([
+            'name' => ['required', 'string', 'max:255'],
+            'barangay_travel_area' => ['required', 'string', 'max:255'],
+            'address' => ['nullable', 'string', 'max:255'],
+            'contact_number' => ['nullable', 'string', 'max:40'],
+            'email' => ['nullable', 'email', 'max:255'],
+        ]);
+        $organization->update($attributes);
+
+        return redirect()->route('settings.toda_organizations')->with('status', 'Organization details updated.');
+    }
+
+    public function toggleTodaOrganization(TodaOrganization $organization): RedirectResponse
+    {
+        $organization->update([
+            'status' => strcasecmp((string) $organization->status, 'Active') === 0 ? 'Inactive' : 'Active',
+        ]);
+
+        return redirect()->route('settings.toda_organizations')->with('status', 'Organization status updated.');
     }
 }

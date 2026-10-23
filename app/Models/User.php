@@ -11,6 +11,10 @@ use Laravel\Sanctum\HasApiTokens;
 
 class User extends Authenticatable
 {
+    public const ROLE_SUPER_ADMIN = 'SUPER_ADMIN';
+    public const ROLE_MANAGER = 'MANAGER';
+    public const ROLE_DRIVER = 'DRIVER';
+
     /** @use HasFactory<UserFactory> */
     use HasApiTokens, HasFactory, Notifiable;
 
@@ -35,6 +39,10 @@ class User extends Authenticatable
         'shift_status',
         'driver_id',
         'must_change_password',
+        'organization_id',
+        'first_name',
+        'middle_name',
+        'last_name',
     ];
 
     /**
@@ -64,5 +72,36 @@ class User extends Authenticatable
     public function driver()
     {
         return $this->hasOne(Driver::class, 'id', 'driver_id');
+    }
+
+    public function organization()
+    {
+        return $this->belongsTo(TodaOrganization::class, 'organization_id');
+    }
+
+    public function terminalActivities()
+    {
+        return $this->hasMany(TerminalActivity::class, 'admin_id');
+    }
+
+    public function hasRole(string $role): bool
+    {
+        return strcasecmp((string) $this->role, $role) === 0;
+    }
+
+    public function isSuperAdmin(): bool
+    {
+        return $this->hasRole(self::ROLE_SUPER_ADMIN)
+            || $this->hasRole('ADMINISTRATOR');
+    }
+
+    public function isManager(): bool
+    {
+        return $this->hasRole(self::ROLE_MANAGER);
+    }
+
+    public function isDriver(): bool
+    {
+        return $this->hasRole(self::ROLE_DRIVER);
     }
 }

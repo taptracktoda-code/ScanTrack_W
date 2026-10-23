@@ -31,9 +31,10 @@
                 <input class="form-check-input" type="checkbox" name="remember" id="remember" {{ old('remember') ? 'checked' : '' }}>
                 <label class="form-check-label" for="remember">Remember me</label>
             </div>
-            <a href="{{ route('register') }}">Create account</a>
         </div>
 
         <button type="submit" class="auth-submit">Log in <span aria-hidden="true">&rarr;</span></button>
     </form>
+
+    <p class="small mt-4 mb-0">Are you a TODA manager? <a href="{{ route('manager.login') }}">Manager sign in</a></p>
 @endsection

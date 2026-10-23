@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Driver;
 use App\Models\DriverLog;
+use App\Models\User;
 use App\Models\Setting;
 use App\Models\TerminalActivity;
 use App\Models\TodaOrganization;
@@ -18,28 +19,11 @@ class DashboardController extends Controller
     public function index(): View
     {
         $organizations = TodaOrganization::orderBy('created_at', 'desc')->get();
-        $shiftStatus = auth()->user()->shift_status ?? 'Available';
-
         return view('dashboard.index', [
             'stats' => $this->stats($organizations),
             'organizations' => $organizations,
             'recentScans' => DriverLog::with(['driver.organization'])->latest('created_at')->limit(8)->get(),
-            'shiftStatus' => $shiftStatus,
-        ]);
-    }
-
-    public function updateShiftStatus(Request $request): JsonResponse
-    {
-        $request->validate([
-            'shift_status' => 'required|string|in:Available,On Break,Off Duty',
-        ]);
-
-        $user = auth()->user();
-        $user->update(['shift_status' => $request->input('shift_status')]);
-
-        return response()->json([
-            'message' => 'Shift status updated.',
-            'shift_status' => $user->shift_status,
+            'recentActivities' => TerminalActivity::with(['admin', 'driver'])->latest('id')->limit(8)->get(),
         ]);
     }
 
@@ -51,9 +35,13 @@ class DashboardController extends Controller
         ]);
     }
 
-    public function notificationFeed(): JsonResponse
+    public function notificationFeed(Request $request): JsonResponse
     {
         $notifications = TerminalActivity::with('driver')
+            ->when(
+                $request->user()->isManager(),
+                fn ($query) => $query->whereHas('driver', fn ($driverQuery) => $driverQuery->where('organization_id', $request->user()->organization_id))
+            )
             ->latest('id')
             ->limit(8)
             ->get()
@@ -126,9 +114,24 @@ class DashboardController extends Controller
                 'icon' => 'bi-truck-front',
             ],
             'drivers' => [
-                'label' => 'Drivers',
+                'label' => 'Registered Drivers',
                 'value' => Driver::count(),
                 'icon' => 'bi-person-badge',
+            ],
+            'active_drivers' => [
+                'label' => 'Active Drivers',
+                'value' => Driver::whereRaw('LOWER(status) = ?', ['active'])->count(),
+                'icon' => 'bi-person-check',
+            ],
+            'inactive_drivers' => [
+                'label' => 'Inactive Drivers',
+                'value' => Driver::whereIn('status', ['Inactive', 'Suspended', 'inactive', 'suspended'])->count(),
+                'icon' => 'bi-person-slash',
+            ],
+            'managers' => [
+                'label' => 'Managers',
+                'value' => User::where('role', User::ROLE_MANAGER)->count(),
+                'icon' => 'bi-people',
             ],
             'active_qr_codes' => [
                 'label' => 'Active QR Codes',

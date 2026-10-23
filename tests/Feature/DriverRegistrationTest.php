@@ -36,33 +36,27 @@ class DriverRegistrationTest extends TestCase
             'organization_id' => $organization->id,
         ]);
 
-        $response->assertRedirect(route('drivers'));
-        $response->assertSessionHas('status', 'Driver registered successfully with an active QR code. Login credentials have been sent to the driver\'s email.');
+        $response->assertRedirect(route('drivers.verification'));
+        $response->assertSessionHas('status', 'Driver registration submitted for Super Admin verification. Credentials will be sent after approval.');
         $this->assertDatabaseHas('drivers', [
             'name' => 'Juan Santos Dela Cruz',
             'organization_id' => $organization->id,
             'vehicle_number' => 'ABC-1234',
+            'status' => 'Pending',
         ]);
-        $this->assertDatabaseHas('vehicles', ['plate_number' => 'ABC-1234', 'vehicle_type' => 'Tricycle']);
-        $this->assertDatabaseCount('qr_codes', 1);
+        $this->assertDatabaseHas('vehicles', ['plate_number' => 'ABC-1234', 'vehicle_type' => 'Tricycle', 'status' => 'Pending']);
+        $this->assertDatabaseCount('qr_codes', 0);
         $this->assertDatabaseHas('terminal_activities', [
             'driver_id' => \App\Models\Driver::firstOrFail()->id,
             'admin_id' => $admin->id,
             'activity' => 'Driver registered',
         ]);
-        $qrCode = \App\Models\QrCode::firstOrFail();
-        $this->assertSame('Active', $qrCode->status);
-        $this->assertMatchesRegularExpression('/^[a-f0-9]{32}$/', $qrCode->qr_token);
-        $this->assertSame($qrCode->driver_id, \App\Models\Driver::firstOrFail()->id);
-        $this->actingAs($admin)
-            ->get(route('drivers.qr', \App\Models\Driver::firstOrFail()))
-            ->assertOk()
-            ->assertHeader('Content-Type', 'image/svg+xml');
         $driverAccount = User::where('email', 'juan.driver@gmail.com')->firstOrFail();
-        $this->assertSame('Driver', $driverAccount->role);
+        $this->assertSame(User::ROLE_DRIVER, $driverAccount->role);
+        $this->assertSame('Pending', $driverAccount->status);
         $this->assertTrue($driverAccount->must_change_password);
         $this->assertFalse(Hash::check('Juan1234', $driverAccount->password));
-        Mail::assertSent(\App\Mail\DriverAccountCreatedMail::class);
+        Mail::assertNothingSent();
     }
 
     public function test_admin_can_regenerate_a_driver_qr_code(): void
@@ -70,6 +64,7 @@ class DriverRegistrationTest extends TestCase
         $admin = User::factory()->create(['role' => 'Administrator']);
         $organization = TodaOrganization::create(['name' => 'North TODA', 'barangay_travel_area' => 'North Area']);
 
+        Mail::fake();
         $this->actingAs($admin)->post(route('drivers.register'), [
             'first_name' => 'Juan', 'last_name' => 'Dela Cruz', 'email' => 'juan2.driver@gmail.com',
             'contact_number' => '09170000000', 'address' => 'Main Street', 'license_number' => 'LIC-DRIVER-2',
@@ -78,6 +73,8 @@ class DriverRegistrationTest extends TestCase
         ]);
 
         $driver = \App\Models\Driver::firstOrFail();
+        $this->actingAs($admin)->post(route('drivers.approve', $driver))->assertRedirect(route('drivers.verification'));
+        $driver->refresh();
         $oldToken = $driver->qrCode->qr_token;
         $this->actingAs($admin)->post(route('drivers.qr.regenerate', $driver))->assertRedirect(route('drivers'));
 
@@ -113,7 +110,7 @@ class DriverRegistrationTest extends TestCase
         $response->assertOk()
             ->assertJsonPath('user.id', $admin->id)
             ->assertJsonPath('user.name', 'Admin User')
-            ->assertJsonPath('user.role', 'admin')
+            ->assertJsonPath('user.role', User::ROLE_SUPER_ADMIN)
             ->assertJsonPath('user.email', 'admin@example.com')
             ->assertJsonStructure(['token', 'user' => ['id', 'name', 'email', 'role']]);
 

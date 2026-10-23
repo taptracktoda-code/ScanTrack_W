@@ -30,8 +30,15 @@ class QrScanService
             return $this->failure('The QR code is not assigned to a driver.');
         }
 
+        if (isset($data['organization_id']) && (int) $driver->organization_id !== (int) $data['organization_id']) {
+            return $this->failure('QR code is not assigned to your organization.');
+        }
+
         if (strcasecmp((string) $driver->status, 'Active') !== 0) {
             return $this->failure('Driver account is inactive.');
+        }
+        if ($driver->organization && strcasecmp((string) $driver->organization->status, 'Active') !== 0) {
+            return $this->failure('The driver organization is inactive.');
         }
 
         $driverAccount = User::where('user_id', 'DRIVER-' . strtoupper((string) $driver->id))->first();
@@ -45,8 +52,11 @@ class QrScanService
                 return ['inactive' => true];
             }
 
+            $today = now();
             $latestLog = DriverLog::where('driver_id', $driver->id)
+                ->whereBetween('created_at', [$today->copy()->startOfDay(), $today->copy()->endOfDay()])
                 ->latest('created_at')
+                ->latest('id')
                 ->lockForUpdate()
                 ->first();
 

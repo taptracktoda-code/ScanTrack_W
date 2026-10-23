@@ -423,32 +423,6 @@ body {
     letter-spacing: -0.03em;
 }
 
-.status-badge {
-    padding: 0.55rem 0.9rem;
-    color: #fff !important;
-    font-weight: 700;
-    background-color: #1f8f5f !important;
-    border: 1px solid rgba(31, 143, 95, 0.2);
-}
-
-.status-badge.text-bg-success {
-    background-color: #1f8f5f !important;
-    color: #fff !important;
-    border-color: rgba(31, 143, 95, 0.2);
-}
-
-.status-badge.text-bg-warning {
-    background-color: #fff7d6 !important;
-    color: #b7791f !important;
-    border-color: rgba(183, 121, 31, 0.2);
-}
-
-.status-badge.text-bg-danger {
-    background-color: #ffe7ea !important;
-    color: #b42318 !important;
-    border-color: rgba(180, 35, 24, 0.2);
-}
-
 .modal-content {
     border-radius: 24px;
     border: 1px solid rgba(223, 229, 239, 0.95);
@@ -611,27 +585,6 @@ body {
 
 .swal2-theme-toast .swal2-icon {
     color: #fff !important;
-}
-
-.status-pill {
-    border: 1px solid var(--dashboard-border);
-    border-radius: 999px;
-    padding: 0.72rem 1.1rem;
-    color: #344054;
-    background: #fff;
-    font-weight: 700;
-}
-
-.status-pill.active[data-duty-status="Available"] {
-    background: #1f8f5f;
-    color: #fff;
-    border-color: rgba(31, 143, 95, 0.2);
-}
-
-.status-pill.active:not([data-duty-status="Available"]) {
-    background: var(--dashboard-green-soft);
-    color: var(--dashboard-green);
-    border-color: rgba(25, 168, 90, 0.2);
 }
 
 .stat-card {

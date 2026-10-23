@@ -15,10 +15,7 @@
             </div>
 
             <div class="navbar-actions d-flex align-items-center gap-2 gap-md-3">
-                <button class="btn btn-light nav-icon-button" type="button" aria-label="Send SMS" data-bs-toggle="modal" data-bs-target="#sendSmsModal">
-                    <i class="bi bi-chat-left-text"></i>
-                </button>
-                @if (strcasecmp((string) auth()->user()?->role, 'administrator') === 0)
+                @if (auth()->user()?->isSuperAdmin() || auth()->user()?->isManager())
                     <div class="dropdown">
                         <button id="navbar-notifications-toggle" type="button" class="btn btn-light nav-icon-button position-relative navbar-notifications-button" aria-label="Notifications" title="Notifications" data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-expanded="false">
                             <i class="bi bi-bell"></i>
@@ -35,7 +32,7 @@
                         </div>
                     </div>
                 @endif
-                <a href="{{ route('settings.profile') }}" class="profile-chip d-flex align-items-center gap-2 text-decoration-none text-reset" title="Go to profile settings">
+                <a href="{{ route(auth()->user()?->isManager() ? 'manager.profile' : 'settings.profile') }}" class="profile-chip d-flex align-items-center gap-2 text-decoration-none text-reset" title="{{ auth()->user()?->isManager() ? 'Manager profile' : 'Go to profile settings' }}">
                     <span class="profile-chip-icon" style="width: 40px; height: 40px; border-radius: 50%; overflow: hidden; display: inline-flex; align-items: center; justify-content: center; background: #f1f3f5;">
                         @if (!empty(auth()->user()?->profile_picture))
                             <img src="{{ asset('storage/' . auth()->user()->profile_picture) }}" alt="Profile picture" style="width: 100%; height: 100%; object-fit: cover; display: block; border-radius: 50%;">
@@ -52,89 +49,12 @@
         </div>
     </nav>
 
-    <div class="modal fade" id="sendSmsModal" tabindex="-1" aria-labelledby="sendSmsModalLabel" aria-hidden="true">
-        <div class="modal-dialog modal-dialog-centered">
-            <form class="modal-content" id="sendSmsForm" method="POST" action="">
-                @csrf
-                <div class="modal-header">
-                    <h2 class="modal-title fs-5" id="sendSmsModalLabel">Send SMS to Driver</h2>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                </div>
-                <div class="modal-body">
-                    <div class="mb-3">
-                        <label for="smsDriver" class="form-label">Select Driver</label>
-                        <select id="smsDriver" name="driver_id" class="form-select" required>
-                            <option value="">Loading drivers...</option>
-                        </select>
-                    </div>
-                    <div class="mb-3">
-                        <label for="smsMessage" class="form-label">Message</label>
-                        <textarea id="smsMessage" name="message" class="form-control" rows="4" required></textarea>
-                    </div>
-                    <div class="text-muted small" id="smsContactPreview">Contact number will appear once a driver is selected.</div>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
-                    <button type="submit" class="btn driver-primary-button">Send SMS</button>
-                </div>
-            </form>
-        </div>
-    </div>
-
     @push('scripts')
         <script>
             document.addEventListener('DOMContentLoaded', () => {
-                const modal = document.getElementById('sendSmsModal');
-                const driverSelect = document.getElementById('smsDriver');
-                const contactPreview = document.getElementById('smsContactPreview');
-                const sendSmsForm = document.getElementById('sendSmsForm');
-
-                const loadDrivers = async () => {
-                    driverSelect.innerHTML = '<option value="">Loading drivers...</option>';
-                    contactPreview.textContent = 'Contact number will appear once a driver is selected.';
-
-                    try {
-                        const response = await fetch('{{ route('drivers.options') }}', {
-                            headers: { Accept: 'application/json' },
-                        });
-                        const payload = await response.json();
-
-                        if (!payload.drivers || payload.drivers.length === 0) {
-                            driverSelect.innerHTML = '<option value="">No drivers available</option>';
-                            return;
-                        }
-
-                        driverSelect.innerHTML = '<option value="">Select a driver</option>' +
-                            payload.drivers.map(driver => `\
-                                <option value="${driver.id}" data-contact="${driver.contact_number}">${driver.name} (${driver.contact_number || 'No contact'})</option>\
-                            `).join('');
-                    } catch (error) {
-                        driverSelect.innerHTML = '<option value="">Unable to load drivers</option>';
-                        console.error('Unable to load drivers for SMS modal.', error);
-                    }
-                };
-
-                if (modal) {
-                    modal.addEventListener('show.bs.modal', loadDrivers);
-                }
-
-                if (driverSelect) {
-                    driverSelect.addEventListener('change', (event) => {
-                        const selected = event.target.selectedOptions[0];
-                        const contact = selected?.dataset?.contact || '';
-                        contactPreview.textContent = contact ? `Contact: ${contact}` : 'Contact number will appear once a driver is selected.';
-
-                        if (selected?.value) {
-                            sendSmsForm.action = `/drivers/${selected.value}/sms`;
-                        } else {
-                            sendSmsForm.action = '';
-                        }
-                    });
-                }
-
                 const notificationBadge = document.getElementById('navbar-notification-badge');
                 const notificationList = document.getElementById('navbar-notification-list');
-                const notificationEndpoint = @json(route('notifications.feed'));
+                const notificationEndpoint = @json(route(auth()->user()?->isManager() ? 'manager.notifications.feed' : 'notifications.feed'));
                 const notificationStorageKey = 'dashboardLastReadActivityId';
                 let latestNotificationId = 0;
 

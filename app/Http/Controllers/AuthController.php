@@ -2,8 +2,8 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\Driver;
 use App\Models\User;
+use App\Models\TodaOrganization;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -29,7 +29,27 @@ class AuthController extends Controller
         $remember = $request->boolean('remember');
 
         if (Auth::attempt($credentials, $remember)) {
+            $user = Auth::user();
+            $isActive = strcasecmp((string) $user->status, 'Active') === 0;
+            $isManagerWithActiveOrganization = $user->isManager()
+                && TodaOrganization::query()
+                    ->whereKey($user->organization_id)
+                    ->where('status', 'Active')
+                    ->exists();
+
+            if (! $isActive || (! $user->isSuperAdmin() && ! $isManagerWithActiveOrganization)) {
+                Auth::logout();
+
+                return back()
+                    ->withErrors(['email' => 'This account is not authorized for the web application.'])
+                    ->onlyInput('email');
+            }
+
             $request->session()->regenerate();
+
+            if ($user->isManager()) {
+                return redirect()->route($user->must_change_password ? 'manager.password.change' : 'manager.dashboard');
+            }
 
             return redirect()->intended(route('dashboard'));
         }
@@ -52,7 +72,7 @@ class AuthController extends Controller
             throw ValidationException::withMessages(['email' => ['Invalid credentials.']]);
         }
 
-        if (strcasecmp((string) $user->role, 'administrator') !== 0) {
+        if (! $user->isSuperAdmin()) {
             return response()->json([
                 'success' => false,
                 'message' => 'This account is not authorized for the admin application.',
@@ -74,41 +94,9 @@ class AuthController extends Controller
                 'id' => $user->id,
                 'name' => $user->name,
                 'email' => $user->email,
-                'role' => 'admin',
+                'role' => User::ROLE_SUPER_ADMIN,
             ],
         ]);
-    }
-
-    public function showRegister(): View
-    {
-        return view('auth.register');
-    }
-
-    public function register(Request $request): RedirectResponse
-    {
-        $attributes = $request->validate([
-            'full_name' => ['required', 'string', 'max:255'],
-            'email' => ['required', 'email', 'max:255', 'unique:admins,email'],
-            'password' => ['required', 'confirmed', 'min:8'],
-            'unit' => ['required', 'in:Main unit,Unit 1,Unit 2'],
-        ]);
-
-        $user = User::create([
-            'name' => $attributes['full_name'],
-            'email' => $attributes['email'],
-            'role' => 'Administrator',
-            'unit' => $attributes['unit'],
-            'user_id' => 'ADMIN-' . strtoupper(uniqid()),
-            'license_number' => '',
-            'contact' => '',
-            'address' => '',
-            'status' => 'Active',
-            'password' => Hash::make($attributes['password']),
-        ]);
-
-        Auth::login($user);
-
-        return redirect()->route('dashboard');
     }
 
     public function logout(Request $request): RedirectResponse
