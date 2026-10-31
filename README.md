@@ -165,16 +165,134 @@ composer test
 - Update `APP_URL` to match your local environment.
 - Set your Mail configuration correctly if activation emails or notifications are used.
 
-## Production Deployment
+## Railway Deployment
 
-For production, make sure you:
+### Architecture and runtime
 
-1. set `APP_ENV=production`
-2. set `APP_DEBUG=false`
-3. configure your database and cache storage properly
-4. run `php artisan optimize`
-5. build front-end assets with `npm run build`
-6. serve the app via a proper PHP/Apache/Nginx or container setup
+TapTrack is a Laravel 12 monolith: Laravel serves the Blade web application, JSON API, and Vite-built assets from one service. There is no separate frontend service or frontend API URL to configure. The repository's `Dockerfile` builds the assets with Node.js 22, installs production dependencies with Composer 2 on PHP 8.3 with Apache, and serves Laravel's `public` directory.
+
+The Docker entrypoint binds Apache to Railway's `PORT`, requires production mode, `APP_DEBUG=false`, an existing `APP_KEY`, a public HTTPS `APP_URL`, secure session cookies, stderr logging, SMTP configuration, and a MySQL connection. It then caches Laravel config and views and verifies database connectivity without printing connection details. It does not generate keys, run migrations, seed data, or start a queue worker. Railway uses `/up` for its process health check; this endpoint confirms the web process responds and does not claim the database is healthy.
+
+### Create the Railway services
+
+1. Push this repository to the Git branch you intend to deploy. Set the Railway service root directory to the repository root (`.`); Railway reads [`railway.json`](./railway.json) and builds the root [`Dockerfile`](./Dockerfile).
+2. Add a Railway MySQL service. In the web service's Variables, reference the MySQL service values (replace `MySQL` with the exact Railway service name):
+
+   ```env
+   DB_CONNECTION=mysql
+   DB_HOST=${{MySQL.MYSQLHOST}}
+   DB_PORT=${{MySQL.MYSQLPORT}}
+   DB_DATABASE=${{MySQL.MYSQLDATABASE}}
+   DB_USERNAME=${{MySQL.MYSQLUSER}}
+   DB_PASSWORD=${{MySQL.MYSQLPASSWORD}}
+   ```
+
+   Use Railway's variable-reference picker if the referenced service has a different name. Do not copy database credentials into Git or the Docker image.
+3. Configure the web service variables. Enter real secret values only in Railway's Variables UI:
+
+   ```env
+   APP_NAME=TapTrack
+   APP_ENV=production
+   APP_DEBUG=false
+   APP_URL=https://<your-public-domain>
+   APP_KEY=<the-existing-application-key>
+   LOG_CHANNEL=stderr
+   LOG_LEVEL=info
+   SESSION_DRIVER=database
+   SESSION_SECURE_COOKIE=true
+   CACHE_STORE=database
+   QUEUE_CONNECTION=sync
+   FILESYSTEM_DISK=public
+   MAIL_MAILER=smtp
+   MAIL_SCHEME=smtp
+   MAIL_HOST=<smtp-host>
+   MAIL_PORT=587
+   MAIL_USERNAME=<smtp-username>
+   MAIL_PASSWORD=<smtp-password>
+   MAIL_ENCRYPTION=tls
+   MAIL_FROM_ADDRESS=<verified-sender-address>
+   MAIL_FROM_NAME=TapTrack
+   ```
+
+   Keep the established application's `APP_KEY`; changing it invalidates encrypted data and sessions. For a brand-new installation only, generate a key once using `php artisan key:generate --show` on a trusted local machine and enter it directly in Railway Variables. Never run key generation during deployment or commit the key.
+
+   `SESSION_DRIVER` and `CACHE_STORE` use the existing MySQL tables, created by the migrations. `QUEUE_CONNECTION=sync` is appropriate for the current code, which sends mail synchronously and does not dispatch queued jobs; no worker service is required. If queued jobs are introduced later, configure and monitor a separate Railway worker before switching to a database/Redis queue.
+4. Configure SMTP before enabling driver registration or password-reset flows. Those flows depend on email delivery. Keep mail credentials in Railway Variables.
+5. Add a Railway Volume to the web service mounted at `/var/www/html/storage/app/public`. This preserves uploaded profile pictures across deploys. Current uploads are profile images validated as JPG, JPEG, PNG, or WebP up to 2 MB; the code does not upload private driver documents. Keep any future private documents off the public disk and authorize downloads. The Docker image creates the `public/storage` symlink. This local volume setup is for a single web instance; use a shared S3-compatible disk before scaling the web service to multiple instances.
+6. Enable a Railway public domain and set `APP_URL` to its HTTPS URL. The app trusts the forwarding headers from Railway's ingress so Laravel recognizes the external HTTPS scheme. Do not expose the container directly around the Railway proxy.
+
+### First deployment and migrations
+
+Do not run migrations automatically at startup. Review and back up the target database first; then, in the Railway web service's shell/console (not a local shell), run:
+
+```sh
+php artisan migrate:status
+php artisan migrate --force
+php artisan migrate:status
+```
+
+The migrations create the schema but do not seed production accounts. After the migration succeeds, create the initial Super Admin from the Railway service shell using the existing CLI command:
+
+```sh
+php artisan scantrack:make-super-admin <administrator-email> --name="<administrator-name>"
+```
+
+The command prompts for and confirms the password without echoing it. Do not run `php artisan db:seed` in production: the current `DatabaseSeeder` creates a test account. Do not expose an unauthenticated Super Admin registration route.
+
+The `2026_06_29_000002_delete_admin_driver_records` migration is now a no-op so a driver named “Administrator” is not silently deleted. The NFC retirement migration still copies legacy card records to QR records but retains the original NFC table. These changes protect databases that have not yet applied those migrations; they cannot restore records removed by an earlier release. Back up existing databases and check migration history before deploying.
+
+### Backups and safe updates
+
+Run database backups from a trusted machine with MySQL client tools installed. The `--password` option prompts interactively; replace the placeholders with Railway's database connection details:
+
+```sh
+mysqldump --single-transaction --host="<DB_HOST>" --port="<DB_PORT>" --user="<DB_USERNAME>" --password "<DB_DATABASE>" > taptrack-backup.sql
+```
+
+Restore only into a deliberately selected database, after confirming the target and testing the backup:
+
+```sh
+mysql --host="<DB_HOST>" --port="<DB_PORT>" --user="<DB_USERNAME>" --password "<DB_DATABASE>" < taptrack-backup.sql
+```
+
+Back up the Railway Volume's uploaded files separately using an approved encrypted off-service backup process; volume contents are not included in the MySQL dump or the application image. Test database and file restores before relying on them. Before each release, back up the database, deploy the new image, and apply reviewed forward migrations manually. Roll back application code by redeploying a known-good image; do not blindly run `migrate:rollback` against production.
+
+### Verify the deployment
+
+After migrations complete, check:
+
+```sh
+php artisan about
+php artisan migrate:status
+```
+
+Then open `https://<your-public-domain>/up` (expect HTTP 200), the login page, and the web/API flows you use. Check Railway deployment logs if the container exits: the entrypoint reports missing `PORT`, production settings, `APP_KEY`, or MySQL variables without printing their values. A healthy `/up` response does not test database or SMTP availability; verify those separately using the application and Railway logs.
+
+Troubleshooting:
+
+- If the container exits before Apache starts, set all required Railway variables and inspect startup logs for the missing variable or failed database connection.
+- If login or session cookies fail behind HTTPS, verify `APP_URL` uses the public `https://` domain and `SESSION_SECURE_COOKIE=true`.
+- If uploaded pictures disappear after redeploy, confirm the volume is mounted at the exact path above and the application uses `FILESYSTEM_DISK=public`.
+- If registration or OTP mail fails, configure valid SMTP credentials and confirm the sender is allowed by the mail provider.
+
+For local checks before pushing:
+
+```sh
+composer validate --no-check-publish
+composer check-platform-reqs --no-dev
+npm ci
+npm run build
+php artisan test
+docker build -t taptrack .
+```
+
+The MySQL migrations must be tested against a fresh Railway MySQL database or a disposable MySQL instance; passing SQLite tests is not proof of MySQL compatibility. Never run `migrate:fresh` against a production database.
+
+### Credential rotation
+
+A mail credential was present in an earlier version of the tracked `.env.example` and has been replaced with placeholders. Removing it from the current file does not remove it from Git history. Revoke/rotate that SMTP credential with the mail provider immediately, update Railway Variables, and review Git history. Do not rewrite shared history or force-push without explicit authorization.
+
+The checked-in `.env.example` is for local development and contains placeholders, not Railway production secrets. `.env` is ignored by Git. There is no separate browser frontend origin or Vite API URL in this application; keep the web app and API on the same origin. If you later add a browser client on another origin, configure CORS to allow only that exact origin rather than using a wildcard.
 
 ## License
 

@@ -31,8 +31,6 @@ return new class extends Migration
                     'updated_at' => now(),
                 ]);
             });
-
-            Schema::drop('nfc_cards');
         }
 
         if (Schema::hasTable('driver_logs') && ! Schema::hasColumn('driver_logs', 'scan_method')) {

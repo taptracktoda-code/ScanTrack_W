@@ -58,4 +58,19 @@ class AuthRegistrationTest extends TestCase
 
         $this->withToken($token)->getJson('/api/admin/dashboard')->assertForbidden();
     }
+
+    public function test_driver_api_login_is_rate_limited(): void
+    {
+        for ($attempt = 0; $attempt < 5; $attempt++) {
+            $this->postJson('/api/login', [
+                'email' => 'unknown@example.com',
+                'password' => 'incorrect-password',
+            ])->assertUnauthorized();
+        }
+
+        $this->postJson('/api/login', [
+            'email' => 'unknown@example.com',
+            'password' => 'incorrect-password',
+        ])->assertTooManyRequests();
+    }
 }

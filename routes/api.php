@@ -1,6 +1,11 @@
 <?php
 
 use App\Http\Controllers\Api\DriverApiController;
+use App\Http\Controllers\Api\AdminDriverApiController;
+use App\Http\Controllers\Api\DriverPasswordOtpController;
+use App\Http\Controllers\Api\ManagerPasswordOtpController;
+use App\Http\Controllers\Api\PublicDriverRegistrationController;
+use App\Http\Controllers\Api\UserApiController;
 use App\Http\Controllers\QrScanController;
 use App\Http\Controllers\ReportController;
 use App\Http\Controllers\DashboardController;
@@ -8,13 +13,31 @@ use App\Http\Controllers\Api\ManagerApiController;
 use Illuminate\Support\Facades\Route;
 
 
-Route::post('/login', [DriverApiController::class, 'login']);
-Route::post('/admin/login', [\App\Http\Controllers\AuthController::class, 'adminLogin']);
-Route::post('/manager/login', [ManagerApiController::class, 'login']);
+Route::post('/login', [DriverApiController::class, 'login'])->middleware('throttle:5,1');
+Route::post('/admin/login', [\App\Http\Controllers\AuthController::class, 'adminLogin'])->middleware('throttle:5,1');
+Route::post('/manager/login', [ManagerApiController::class, 'login'])->middleware('throttle:5,1');
+Route::post('/drivers/registration', [PublicDriverRegistrationController::class, 'store'])->middleware('throttle:10,1');
+Route::middleware('throttle:5,1')->prefix('driver/password/otp')->group(function () {
+    Route::post('/request', [DriverPasswordOtpController::class, 'requestCode']);
+    Route::post('/verify', [DriverPasswordOtpController::class, 'verifyCode']);
+    Route::post('/reset', [DriverPasswordOtpController::class, 'resetPassword']);
+});
+Route::middleware('throttle:5,1')->prefix('manager/password/otp')->group(function () {
+    Route::post('/request', [ManagerPasswordOtpController::class, 'requestCode']);
+    Route::post('/verify', [ManagerPasswordOtpController::class, 'verifyCode']);
+    Route::post('/reset', [ManagerPasswordOtpController::class, 'resetPassword']);
+});
+Route::middleware('auth:sanctum')->get('/user', [UserApiController::class, 'show']);
+Route::middleware(['auth:sanctum', 'super-admin'])->prefix('admin')->group(function () {
+    Route::get('/drivers', [AdminDriverApiController::class, 'index']);
+    Route::post('/logout', [AdminDriverApiController::class, 'logout']);
+});
 Route::middleware(['auth:sanctum', 'manager'])->prefix('manager')->group(function () {
     Route::post('/logout', [ManagerApiController::class, 'logout']);
     Route::post('/change-password', [ManagerApiController::class, 'changePassword']);
     Route::middleware('manager.password.changed')->group(function () {
+        Route::post('/profile/avatar', [ManagerApiController::class, 'uploadProfileAvatar']);
+        Route::delete('/profile/avatar', [ManagerApiController::class, 'removeProfileAvatar']);
         Route::get('/dashboard', [ManagerApiController::class, 'dashboard']);
         Route::get('/drivers', [ManagerApiController::class, 'drivers']);
         Route::post('/drivers', [ManagerApiController::class, 'registerDriver']);
@@ -46,14 +69,16 @@ Route::middleware(['auth:sanctum', 'driver'])->prefix('driver')->group(function 
     Route::post('/logout', [DriverApiController::class, 'logout']);
     Route::post('/change-password', [DriverApiController::class, 'changePassword']);
     Route::middleware('driver.password.changed')->group(function () {
+        Route::post('/profile/avatar', [DriverApiController::class, 'uploadProfileAvatar']);
+        Route::delete('/profile/avatar', [DriverApiController::class, 'removeProfileAvatar']);
         Route::post('/shift-status', [DriverApiController::class, 'updateShiftStatus']);
         Route::get('/profile', [DriverApiController::class, 'profile']);
         Route::get('/dashboard', [DriverApiController::class, 'dashboard']);
         Route::get('/attendance/today', [DriverApiController::class, 'todayAttendance']);
-        Route::get('/attendance/{date}', [DriverApiController::class, 'attendanceByDate']);
-        Route::get('/attendance', [DriverApiController::class, 'attendanceHistory']);
         Route::get('/attendance/monthly', [DriverApiController::class, 'monthlyAttendance']);
         Route::get('/attendance/summary', [DriverApiController::class, 'attendanceSummary']);
+        Route::get('/attendance', [DriverApiController::class, 'attendanceHistory']);
+        Route::get('/attendance/{date}', [DriverApiController::class, 'attendanceByDate']);
         Route::get('/trip-destinations', [DriverApiController::class, 'tripDestinations']);
         Route::post('/trips', [DriverApiController::class, 'startTrip']);
         Route::get('/trips/active', [DriverApiController::class, 'activeTrip']);

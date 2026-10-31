@@ -18,11 +18,11 @@ use App\Http\Controllers\QueueMonitoringController;
 
 Route::middleware('guest')->group(function () {
     Route::get('/login', [AuthController::class, 'showLogin'])->name('login');
-    Route::post('/login', [AuthController::class, 'login']);
+    Route::post('/login', [AuthController::class, 'login'])->middleware('throttle:5,1');
 });
 
 Route::get('/manager/login', [ManagerSessionController::class, 'showLogin'])->name('manager.login');
-Route::post('/manager/login', [ManagerSessionController::class, 'login'])->name('manager.login.store');
+Route::post('/manager/login', [ManagerSessionController::class, 'login'])->middleware('throttle:5,1')->name('manager.login.store');
 Route::middleware(['auth', 'manager'])->prefix('manager')->name('manager.')->group(function () {
     Route::post('/logout', [ManagerSessionController::class, 'logout'])->name('logout');
     Route::get('/password/change', [ManagerSessionController::class, 'showPasswordChange'])->name('password.change');
