@@ -22,10 +22,12 @@ RUN apt-get update \
     && docker-php-ext-configure gd --with-freetype --with-jpeg \
     && docker-php-ext-install -j"$(nproc)" bcmath gd intl opcache pdo_mysql zip \
     && a2enmod headers rewrite \
-    && find /etc/apache2/mods-enabled -maxdepth 1 -type l \
+    && find /etc/apache2/mods-enabled -maxdepth 1 \
+        \( -type f -o -type l \) \
         \( -name 'mpm_*.load' -o -name 'mpm_*.conf' \) -delete \
     && a2enmod mpm_prefork \
-    && enabled_mpms="$(find /etc/apache2/mods-enabled -maxdepth 1 -type l -name 'mpm_*.load' -printf '%f\n')" \
+    && enabled_mpms="$(find /etc/apache2/mods-enabled -maxdepth 1 \
+        \( -type f -o -type l \) -name 'mpm_*.load' -printf '%f\n')" \
     && echo "Enabled Apache MPM: $enabled_mpms" \
     && [ "$enabled_mpms" = "mpm_prefork.load" ] \
     && active_mpm_loads="$(grep -RInE '^[[:space:]]*LoadModule[[:space:]]+mpm_' \

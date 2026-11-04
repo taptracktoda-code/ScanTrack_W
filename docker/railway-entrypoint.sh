@@ -116,9 +116,29 @@ fi
 sed -i "s/^Listen 80$/Listen ${PORT}/" /etc/apache2/ports.conf
 sed -i "s/<VirtualHost \*:80>/<VirtualHost *:${PORT}>/" /etc/apache2/sites-available/000-default.conf
 
-echo "Enabled Apache MPM symlinks:"
-find /etc/apache2/mods-enabled -maxdepth 1 -type l \
-    \( -name 'mpm_*.load' -o -name 'mpm_*.conf' \) -printf '%p -> %l\n'
+echo "Normalizing enabled Apache MPM files and symlinks:"
+find /etc/apache2/mods-enabled -maxdepth 1 \
+    \( -type f -o -type l \) \
+    \( -name 'mpm_*.load' -o -name 'mpm_*.conf' \) -delete
+
+if [ ! -f /etc/apache2/mods-available/mpm_prefork.load ]; then
+    echo "The Apache installation does not provide mpm_prefork." >&2
+    exit 1
+fi
+
+a2enmod mpm_prefork
+
+enabled_mpms="$(find /etc/apache2/mods-enabled -maxdepth 1 \
+    \( -type f -o -type l \) -name 'mpm_*.load' -printf '%f\n')"
+if [ "$enabled_mpms" != "mpm_prefork.load" ]; then
+    echo "Expected only mpm_prefork.load enabled; found: ${enabled_mpms:-none}." >&2
+    exit 1
+fi
+
+echo "Enabled Apache MPM files and symlinks:"
+find /etc/apache2/mods-enabled -maxdepth 1 \
+    \( -type f -o -type l \) \
+    \( -name 'mpm_*.load' -o -name 'mpm_*.conf' \) -printf '%y %p -> %l\n'
 
 echo "Apache MPM LoadModule declarations in enabled configuration:"
 grep -RInE --include='*.load' --include='*.conf' \
