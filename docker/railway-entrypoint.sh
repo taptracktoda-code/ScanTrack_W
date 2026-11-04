@@ -57,8 +57,8 @@ case "${SESSION_SECURE_COOKIE:-false}" in
         ;;
 esac
 
-if [ "${MAIL_MAILER:-}" != "resend" ]; then
-    echo "MAIL_MAILER must be set to resend." >&2
+if [ "${MAIL_MAILER:-}" != "gmail" ]; then
+    echo "MAIL_MAILER must be set to gmail." >&2
     exit 1
 fi
 
@@ -77,7 +77,7 @@ if [ -z "${DB_URL:-}" ]; then
     done
 fi
 
-for variable in RESEND_API_KEY MAIL_FROM_ADDRESS; do
+for variable in GMAIL_OAUTH_CLIENT_ID GMAIL_OAUTH_CLIENT_SECRET GMAIL_OAUTH_REFRESH_TOKEN MAIL_FROM_ADDRESS; do
     eval "value=\${$variable:-}"
     if [ -z "$value" ]; then
         echo "$variable must be configured in Railway Variables." >&2

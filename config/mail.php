@@ -14,7 +14,7 @@ return [
     |
     */
 
-    'default' => env('MAIL_MAILER', 'resend'),
+    'default' => env('MAIL_MAILER', 'gmail'),
 
     /*
     |--------------------------------------------------------------------------
@@ -62,8 +62,8 @@ return [
             // ],
         ],
 
-        'resend' => [
-            'transport' => 'resend',
+        'gmail' => [
+            'transport' => 'gmail',
         ],
 
         'sendmail' => [

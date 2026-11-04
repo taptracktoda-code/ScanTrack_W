@@ -2,8 +2,12 @@
 
 namespace App\Providers;
 
+use App\Mail\Transport\GmailApiTransport;
+use GuzzleHttp\Client;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\ServiceProvider;
+use InvalidArgumentException;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -21,5 +25,21 @@ class AppServiceProvider extends ServiceProvider
     public function boot(): void
     {
         Schema::defaultStringLength(191);
+
+        Mail::extend('gmail', function (array $config = []): GmailApiTransport {
+            $credentials = config('services.gmail');
+            foreach (['client_id', 'client_secret', 'refresh_token'] as $key) {
+                if (! is_string($credentials[$key] ?? null) || trim($credentials[$key]) === '') {
+                    throw new InvalidArgumentException('Gmail API OAuth credentials must be configured.');
+                }
+            }
+
+            return new GmailApiTransport(
+                new Client(),
+                $credentials['client_id'],
+                $credentials['client_secret'],
+                $credentials['refresh_token'],
+            );
+        });
     }
 }
