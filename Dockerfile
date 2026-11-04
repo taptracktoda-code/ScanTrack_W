@@ -28,6 +28,18 @@ RUN apt-get update \
     && enabled_mpms="$(find /etc/apache2/mods-enabled -maxdepth 1 -type l -name 'mpm_*.load' -printf '%f\n')" \
     && echo "Enabled Apache MPM: $enabled_mpms" \
     && [ "$enabled_mpms" = "mpm_prefork.load" ] \
+    && active_mpm_loads="$(grep -RInE '^[[:space:]]*LoadModule[[:space:]]+mpm_' \
+        /etc/apache2/mods-enabled \
+        /etc/apache2/conf-enabled \
+        /etc/apache2/sites-enabled \
+        /etc/apache2/apache2.conf \
+        /etc/apache2/ports.conf)" \
+    && printf 'Active Apache MPM LoadModule declarations:\n%s\n' "$active_mpm_loads" \
+    && active_mpm_count="$(printf '%s\n' "$active_mpm_loads" | wc -l)" \
+    && if [ "$active_mpm_count" -ne 1 ] || ! printf '%s\n' "$active_mpm_loads" | grep -q 'LoadModule mpm_prefork_module'; then \
+        echo "Expected exactly one active LoadModule declaration for mpm_prefork_module; found $active_mpm_count MPM declarations." >&2; \
+        exit 1; \
+    fi \
     && apache2ctl -t \
     && rm -rf /var/lib/apt/lists/*
 
