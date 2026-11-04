@@ -116,6 +116,39 @@ fi
 sed -i "s/^Listen 80$/Listen ${PORT}/" /etc/apache2/ports.conf
 sed -i "s/<VirtualHost \*:80>/<VirtualHost *:${PORT}>/" /etc/apache2/sites-available/000-default.conf
 
+echo "Enabled Apache MPM symlinks:"
+find /etc/apache2/mods-enabled -maxdepth 1 -type l \
+    \( -name 'mpm_*.load' -o -name 'mpm_*.conf' \) -printf '%p -> %l\n'
+
+echo "Apache MPM LoadModule declarations in enabled configuration:"
+grep -RInE --include='*.load' --include='*.conf' \
+    '^[[:space:]]*LoadModule[[:space:]]+mpm_' \
+    /etc/apache2/mods-enabled \
+    /etc/apache2/conf-enabled \
+    /etc/apache2/sites-enabled \
+    /etc/apache2/apache2.conf \
+    /etc/apache2/ports.conf
+
+echo "Apache MPM declarations in available module files (these may be disabled):"
+grep -RInE --include='*.load' --include='*.conf' \
+    '^[[:space:]]*LoadModule[[:space:]]+mpm_' /etc/apache2/mods-available
+
+echo "Apache Include and IncludeOptional directives:"
+grep -RInE --include='*.conf' --include='*.load' \
+    '^[[:space:]]*Include(Optional)?[[:space:]]' \
+    /etc/apache2/apache2.conf \
+    /etc/apache2/mods-enabled \
+    /etc/apache2/conf-enabled \
+    /etc/apache2/sites-enabled
+
+echo "Apache resolved configuration include paths:"
+if apache2ctl -t -D DUMP_INCLUDES; then
+    :
+else
+    echo "Apache could not complete the include-path dump; the final configuration test will report the fatal error." >&2
+fi
+
+echo "Apache configuration test:"
 apache2ctl -t
 
 exec apache2-foreground
