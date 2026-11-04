@@ -171,7 +171,7 @@ composer test
 
 TapTrack is a Laravel 12 monolith: Laravel serves the Blade web application, JSON API, and Vite-built assets from one service. There is no separate frontend service or frontend API URL to configure. The repository's `Dockerfile` builds the assets with Node.js 22, installs production dependencies with Composer 2 on PHP 8.3 with Apache, and serves Laravel's `public` directory.
 
-The Docker build retains PHP Apache's `mpm_prefork` module, disables only detected competing MPM modules, and validates Apache's configuration. The Docker entrypoint binds Apache to Railway's `PORT`, requires production mode, `APP_DEBUG=false`, an existing `APP_KEY`, a public HTTPS `APP_URL`, secure session cookies, stderr logging, SMTP configuration, and a MySQL connection. It then caches Laravel config and views, verifies database connectivity without printing connection details, and validates Apache's port-specific configuration before starting it. It does not generate keys, run migrations, seed data, or start a queue worker. Railway uses `/up` for its process health check; this endpoint confirms the web process responds and does not claim the database is healthy.
+The Docker build retains PHP Apache's `mpm_prefork` module, disables only detected competing MPM modules, and validates Apache's configuration. The Docker entrypoint binds Apache to Railway's `PORT`, requires production mode, `APP_DEBUG=false`, an existing `APP_KEY`, a public HTTPS `APP_URL`, secure session cookies, stderr logging, Resend API configuration, and a MySQL connection. It then caches Laravel config and views, verifies database connectivity without printing connection details, and validates Apache's port-specific configuration before starting it. It does not generate keys, run migrations, seed data, or start a queue worker. Railway uses `/up` for its process health check; this endpoint confirms the web process responds and does not claim the database is healthy.
 
 ### Create the Railway services
 
@@ -203,13 +203,8 @@ The Docker build retains PHP Apache's `mpm_prefork` module, disables only detect
    CACHE_STORE=database
    QUEUE_CONNECTION=sync
    FILESYSTEM_DISK=public
-   MAIL_MAILER=smtp
-   MAIL_SCHEME=smtp
-   MAIL_HOST=<smtp-host>
-   MAIL_PORT=587
-   MAIL_USERNAME=<smtp-username>
-   MAIL_PASSWORD=<smtp-password>
-   MAIL_ENCRYPTION=tls
+   MAIL_MAILER=resend
+   RESEND_API_KEY=<resend-api-key>
    MAIL_FROM_ADDRESS=<verified-sender-address>
    MAIL_FROM_NAME=TapTrack
    ```
@@ -217,7 +212,8 @@ The Docker build retains PHP Apache's `mpm_prefork` module, disables only detect
    Keep the established application's `APP_KEY`; changing it invalidates encrypted data and sessions. For a brand-new installation only, generate a key once using `php artisan key:generate --show` on a trusted local machine and enter it directly in Railway Variables. Never run key generation during deployment or commit the key.
 
    `SESSION_DRIVER` and `CACHE_STORE` use the existing MySQL tables, created by the migrations. `QUEUE_CONNECTION=sync` is appropriate for the current code, which sends mail synchronously and does not dispatch queued jobs; no worker service is required. If queued jobs are introduced later, configure and monitor a separate Railway worker before switching to a database/Redis queue.
-4. Configure SMTP before enabling driver registration or password-reset flows. Those flows depend on email delivery. Keep mail credentials in Railway Variables.
+   Create an API key in Resend and verify the sending domain before using it for production mail. Add `RESEND_API_KEY` and the sender address under Railway Variables; never put the API key in source control. The `onboarding@resend.dev` sender in `.env.example` is only a development placeholder.
+4. Configure Resend before enabling driver registration or password-reset flows. Those flows depend on email delivery. Keep the API key in Railway Variables.
 5. Add a Railway Volume to the web service mounted at `/var/www/html/storage/app/public`. This preserves uploaded profile pictures across deploys. Current uploads are profile images validated as JPG, JPEG, PNG, or WebP up to 2 MB; the code does not upload private driver documents. Keep any future private documents off the public disk and authorize downloads. The Docker image creates the `public/storage` symlink. This local volume setup is for a single web instance; use a shared S3-compatible disk before scaling the web service to multiple instances.
 6. Enable a Railway public domain and set `APP_URL` to its HTTPS URL. The app trusts the forwarding headers from Railway's ingress so Laravel recognizes the external HTTPS scheme. Do not expose the container directly around the Railway proxy.
 
@@ -266,14 +262,14 @@ php artisan about
 php artisan migrate:status
 ```
 
-Then open `https://<your-public-domain>/up` (expect HTTP 200), the login page, and the web/API flows you use. Check Railway deployment logs if the container exits: the entrypoint reports missing `PORT`, production settings, `APP_KEY`, or MySQL variables without printing their values. A healthy `/up` response does not test database or SMTP availability; verify those separately using the application and Railway logs.
+Then open `https://<your-public-domain>/up` (expect HTTP 200), the login page, and the web/API flows you use. Check Railway deployment logs if the container exits: the entrypoint reports missing `PORT`, production settings, `APP_KEY`, or MySQL variables without printing their values. A healthy `/up` response does not test database or Resend availability; verify those separately using the application, Resend dashboard, and Railway logs.
 
 Troubleshooting:
 
 - If the container exits before Apache starts, set all required Railway variables and inspect startup logs for the missing variable or failed database connection.
 - If login or session cookies fail behind HTTPS, verify `APP_URL` uses the public `https://` domain and `SESSION_SECURE_COOKIE=true`.
 - If uploaded pictures disappear after redeploy, confirm the volume is mounted at the exact path above and the application uses `FILESYSTEM_DISK=public`.
-- If registration or OTP mail fails, configure valid SMTP credentials and confirm the sender is allowed by the mail provider.
+- If registration or OTP mail fails, verify the `RESEND_API_KEY`, ensure the sender domain is verified in Resend, and check the Resend dashboard for delivery or rejection events.
 
 For local checks before pushing:
 
@@ -290,7 +286,7 @@ The MySQL migrations must be tested against a fresh Railway MySQL database or a 
 
 ### Credential rotation
 
-A mail credential was present in an earlier version of the tracked `.env.example` and has been replaced with placeholders. Removing it from the current file does not remove it from Git history. Revoke/rotate that SMTP credential with the mail provider immediately, update Railway Variables, and review Git history. Do not rewrite shared history or force-push without explicit authorization.
+A mail credential was present in an earlier version of the tracked `.env.example` and has been replaced with placeholders. Removing it from the current file does not remove it from Git history. Revoke any credential that was previously committed, rotate it with the provider, and review Git history. Do not rewrite shared history or force-push without explicit authorization.
 
 The checked-in `.env.example` is for local development and contains placeholders, not Railway production secrets. `.env` is ignored by Git. There is no separate browser frontend origin or Vite API URL in this application; keep the web app and API on the same origin. If you later add a browser client on another origin, configure CORS to allow only that exact origin rather than using a wildcard.
 
