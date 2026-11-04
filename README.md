@@ -171,7 +171,7 @@ composer test
 
 TapTrack is a Laravel 12 monolith: Laravel serves the Blade web application, JSON API, and Vite-built assets from one service. There is no separate frontend service or frontend API URL to configure. The repository's `Dockerfile` builds the assets with Node.js 22, installs production dependencies with Composer 2 on PHP 8.3 with Apache, and serves Laravel's `public` directory.
 
-The Docker entrypoint binds Apache to Railway's `PORT`, requires production mode, `APP_DEBUG=false`, an existing `APP_KEY`, a public HTTPS `APP_URL`, secure session cookies, stderr logging, SMTP configuration, and a MySQL connection. It then caches Laravel config and views and verifies database connectivity without printing connection details. It does not generate keys, run migrations, seed data, or start a queue worker. Railway uses `/up` for its process health check; this endpoint confirms the web process responds and does not claim the database is healthy.
+The Docker build retains PHP Apache's `mpm_prefork` module, disables only detected competing MPM modules, and validates Apache's configuration. The Docker entrypoint binds Apache to Railway's `PORT`, requires production mode, `APP_DEBUG=false`, an existing `APP_KEY`, a public HTTPS `APP_URL`, secure session cookies, stderr logging, SMTP configuration, and a MySQL connection. It then caches Laravel config and views, verifies database connectivity without printing connection details, and validates Apache's port-specific configuration before starting it. It does not generate keys, run migrations, seed data, or start a queue worker. Railway uses `/up` for its process health check; this endpoint confirms the web process responds and does not claim the database is healthy.
 
 ### Create the Railway services
 

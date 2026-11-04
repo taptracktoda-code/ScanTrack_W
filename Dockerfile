@@ -22,6 +22,19 @@ RUN apt-get update \
     && docker-php-ext-configure gd --with-freetype --with-jpeg \
     && docker-php-ext-install -j"$(nproc)" bcmath gd intl opcache pdo_mysql zip \
     && a2enmod headers rewrite \
+    && enabled_mpms="$(find /etc/apache2/mods-enabled -maxdepth 1 -type l -name 'mpm_*.load' -printf '%f\n' | sed 's/\.load$//')" \
+    && printf 'Apache MPMs enabled by base image: %s\n' "$enabled_mpms" \
+    && case " $enabled_mpms " in *" mpm_prefork "*) ;; *) echo "The PHP Apache image must have mpm_prefork enabled." >&2; exit 1 ;; esac \
+    && for mpm in mpm_worker mpm_event; do \
+        if [ -e "/etc/apache2/mods-enabled/${mpm}.load" ]; then a2dismod "$mpm"; fi; \
+    done \
+    && active_mpm_count="$(find /etc/apache2/mods-enabled -maxdepth 1 -type l -name 'mpm_*.load' | wc -l)" \
+    && if [ "$active_mpm_count" -ne 1 ]; then \
+        echo "Expected exactly one enabled Apache MPM; found $active_mpm_count." >&2; \
+        find /etc/apache2/mods-enabled -maxdepth 1 -type l -name 'mpm_*.load' -printf '%f\n' >&2; \
+        exit 1; \
+    fi \
+    && apache2ctl -t \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=composer:2 /usr/bin/composer /usr/local/bin/composer
