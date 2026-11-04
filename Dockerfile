@@ -22,22 +22,12 @@ RUN apt-get update \
     && docker-php-ext-configure gd --with-freetype --with-jpeg \
     && docker-php-ext-install -j"$(nproc)" bcmath gd intl opcache pdo_mysql zip \
     && a2enmod headers rewrite \
-    && if [ ! -f /etc/apache2/mods-available/mpm_prefork.load ]; then \
-        echo "The PHP Apache image does not provide mpm_prefork." >&2; \
-        exit 1; \
-    fi \
-    && for mpm in mpm_worker mpm_event; do \
-        if [ -e "/etc/apache2/mods-enabled/${mpm}.load" ]; then a2dismod "$mpm"; fi; \
-    done \
-    && if [ ! -e /etc/apache2/mods-enabled/mpm_prefork.load ]; then a2enmod mpm_prefork; fi \
-    && enabled_mpms="$(for module in /etc/apache2/mods-enabled/mpm_*.load; do \
-        [ -e "$module" ] || continue; \
-        printf '%s\n' "${module##*/}"; \
-    done)" \
-    && if [ "$enabled_mpms" != "mpm_prefork.load" ]; then \
-        echo "Expected only mpm_prefork.load enabled; found: ${enabled_mpms:-none}." >&2; \
-        exit 1; \
-    fi \
+    && find /etc/apache2/mods-enabled -maxdepth 1 -type l \
+        \( -name 'mpm_*.load' -o -name 'mpm_*.conf' \) -delete \
+    && a2enmod mpm_prefork \
+    && enabled_mpms="$(find /etc/apache2/mods-enabled -maxdepth 1 -type l -name 'mpm_*.load' -printf '%f\n')" \
+    && echo "Enabled Apache MPM: $enabled_mpms" \
+    && [ "$enabled_mpms" = "mpm_prefork.load" ] \
     && apache2ctl -t \
     && rm -rf /var/lib/apt/lists/*
 
