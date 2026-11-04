@@ -22,16 +22,20 @@ RUN apt-get update \
     && docker-php-ext-configure gd --with-freetype --with-jpeg \
     && docker-php-ext-install -j"$(nproc)" bcmath gd intl opcache pdo_mysql zip \
     && a2enmod headers rewrite \
-    && enabled_mpms="$(find /etc/apache2/mods-enabled -maxdepth 1 -type l -name 'mpm_*.load' -printf '%f\n' | sed 's/\.load$//')" \
-    && printf 'Apache MPMs enabled by base image: %s\n' "$enabled_mpms" \
-    && case " $enabled_mpms " in *" mpm_prefork "*) ;; *) echo "The PHP Apache image must have mpm_prefork enabled." >&2; exit 1 ;; esac \
+    && if [ ! -f /etc/apache2/mods-available/mpm_prefork.load ]; then \
+        echo "The PHP Apache image does not provide mpm_prefork." >&2; \
+        exit 1; \
+    fi \
     && for mpm in mpm_worker mpm_event; do \
         if [ -e "/etc/apache2/mods-enabled/${mpm}.load" ]; then a2dismod "$mpm"; fi; \
     done \
-    && active_mpm_count="$(find /etc/apache2/mods-enabled -maxdepth 1 -type l -name 'mpm_*.load' | wc -l)" \
-    && if [ "$active_mpm_count" -ne 1 ]; then \
-        echo "Expected exactly one enabled Apache MPM; found $active_mpm_count." >&2; \
-        find /etc/apache2/mods-enabled -maxdepth 1 -type l -name 'mpm_*.load' -printf '%f\n' >&2; \
+    && if [ ! -e /etc/apache2/mods-enabled/mpm_prefork.load ]; then a2enmod mpm_prefork; fi \
+    && enabled_mpms="$(for module in /etc/apache2/mods-enabled/mpm_*.load; do \
+        [ -e "$module" ] || continue; \
+        printf '%s\n' "${module##*/}"; \
+    done)" \
+    && if [ "$enabled_mpms" != "mpm_prefork.load" ]; then \
+        echo "Expected only mpm_prefork.load enabled; found: ${enabled_mpms:-none}." >&2; \
         exit 1; \
     fi \
     && apache2ctl -t \
