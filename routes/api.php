@@ -10,6 +10,7 @@ use App\Http\Controllers\QrScanController;
 use App\Http\Controllers\ReportController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\Api\ManagerApiController;
+use App\Http\Controllers\Api\MobileNotificationController;
 use Illuminate\Support\Facades\Route;
 
 
@@ -36,9 +37,15 @@ Route::middleware(['auth:sanctum', 'manager'])->prefix('manager')->group(functio
     Route::post('/logout', [ManagerApiController::class, 'logout']);
     Route::post('/change-password', [ManagerApiController::class, 'changePassword']);
     Route::middleware('manager.password.changed')->group(function () {
+        Route::get('/notifications', [MobileNotificationController::class, 'index']);
+        Route::get('/notifications/unread/count', [MobileNotificationController::class, 'unreadCount']);
+        Route::put('/notifications/{notificationId}/read', [MobileNotificationController::class, 'markAsRead']);
+        Route::post('/notifications/push-token', [MobileNotificationController::class, 'registerPushToken']);
+        Route::delete('/notifications/push-token', [MobileNotificationController::class, 'removePushToken']);
         Route::post('/profile/avatar', [ManagerApiController::class, 'uploadProfileAvatar']);
         Route::delete('/profile/avatar', [ManagerApiController::class, 'removeProfileAvatar']);
         Route::get('/dashboard', [ManagerApiController::class, 'dashboard']);
+        Route::post('/qr/scan', [ManagerApiController::class, 'scanQr']);
         Route::get('/drivers', [ManagerApiController::class, 'drivers']);
         Route::post('/drivers', [ManagerApiController::class, 'registerDriver']);
         Route::get('/trip-destinations', [ManagerApiController::class, 'tripDestinations']);
@@ -69,6 +76,11 @@ Route::middleware(['auth:sanctum', 'driver'])->prefix('driver')->group(function 
     Route::post('/logout', [DriverApiController::class, 'logout']);
     Route::post('/change-password', [DriverApiController::class, 'changePassword']);
     Route::middleware('driver.password.changed')->group(function () {
+        Route::get('/notifications', [MobileNotificationController::class, 'index']);
+        Route::get('/notifications/unread/count', [MobileNotificationController::class, 'unreadCount']);
+        Route::put('/notifications/{notificationId}/read', [MobileNotificationController::class, 'markAsRead']);
+        Route::post('/notifications/push-token', [MobileNotificationController::class, 'registerPushToken']);
+        Route::delete('/notifications/push-token', [MobileNotificationController::class, 'removePushToken']);
         Route::post('/profile/avatar', [DriverApiController::class, 'uploadProfileAvatar']);
         Route::delete('/profile/avatar', [DriverApiController::class, 'removeProfileAvatar']);
         Route::post('/shift-status', [DriverApiController::class, 'updateShiftStatus']);

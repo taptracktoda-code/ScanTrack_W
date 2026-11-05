@@ -13,6 +13,7 @@ use App\Models\TodaOrganization;
 use App\Models\User;
 use App\Models\Vehicle;
 use App\Services\ManagerDriverAccountService;
+use App\Services\MobileNotificationService;
 use App\Services\QrScanService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -367,7 +368,11 @@ class ManagerApiController extends Controller
         return response()->json($result, $result['success'] ? 200 : 422);
     }
 
-    public function registerDriver(Request $request, ManagerDriverAccountService $driverAccounts): JsonResponse
+    public function registerDriver(
+        Request $request,
+        ManagerDriverAccountService $driverAccounts,
+        MobileNotificationService $notifications,
+    ): JsonResponse
     {
         $manager = $request->user();
         if ($manager->must_change_password) {
@@ -400,6 +405,20 @@ class ManagerApiController extends Controller
             $result['driver'],
             $result['email'],
             $result['temporary_password']
+        );
+        $notifications->notifyUser(
+            $manager,
+            'Driver account created',
+            "The account for {$result['driver']->name} is ready.",
+            'account',
+            ['screen' => 'driver-registration', 'driver_id' => $result['driver']->id],
+        );
+        $notifications->notifyDriver(
+            $result['driver'],
+            'Your ScanTrack account is ready',
+            'Sign in with the credentials sent to your email.',
+            'account',
+            ['screen' => 'login'],
         );
 
         return response()->json([
@@ -443,7 +462,7 @@ class ManagerApiController extends Controller
         ]);
     }
 
-    public function enqueueDriver(Request $request): JsonResponse
+    public function enqueueDriver(Request $request, MobileNotificationService $notifications): JsonResponse
     {
         $organization = $this->activeOrganization($request->user());
         $attributes = $request->validate(['driver_id' => ['required', 'integer', 'exists:drivers,id']]);
@@ -484,10 +503,18 @@ class ManagerApiController extends Controller
             return $entry;
         });
 
+        $notifications->notifyDriver(
+            $driver,
+            'You were added to the queue',
+            "Your queue number is {$entry->queue_number} at {$organization->name}.",
+            'system',
+            ['screen' => 'dashboard', 'queue_number' => $entry->queue_number],
+        );
+
         return response()->json(['success' => true, 'message' => 'Driver added to the queue.', 'entry' => $entry], 201);
     }
 
-    public function serveNext(Request $request): JsonResponse
+    public function serveNext(Request $request, MobileNotificationService $notifications): JsonResponse
     {
         $organization = $this->activeOrganization($request->user());
         $entry = DB::transaction(function () use ($organization, $request): ?OrganizationQueueEntry {
@@ -521,10 +548,24 @@ class ManagerApiController extends Controller
             return response()->json(['success' => false, 'message' => 'A driver is already being served or the queue is empty.'], 409);
         }
 
+        if ($entry->driver) {
+            $notifications->notifyDriver(
+                $entry->driver,
+                'It is your turn',
+                "Queue number {$entry->queue_number} is being called at {$organization->name}.",
+                'system',
+                ['screen' => 'dashboard', 'queue_number' => $entry->queue_number],
+            );
+        }
+
         return response()->json(['success' => true, 'entry' => $entry]);
     }
 
-    public function completeQueueEntry(Request $request, OrganizationQueueEntry $entry): JsonResponse
+    public function completeQueueEntry(
+        Request $request,
+        OrganizationQueueEntry $entry,
+        MobileNotificationService $notifications,
+    ): JsonResponse
     {
         $organization = $this->activeOrganization($request->user());
         abort_unless($entry->organization_id === $organization->id, 404);
@@ -541,6 +582,16 @@ class ManagerApiController extends Controller
                 'description' => 'Queue #'.$entry->queue_number.' at '.$organization->name,
             ]);
         });
+
+        if ($entry->driver) {
+            $notifications->notifyDriver(
+                $entry->driver,
+                'Queue service completed',
+                "Your queue service at {$organization->name} is complete.",
+                'system',
+                ['screen' => 'dashboard', 'queue_number' => $entry->queue_number],
+            );
+        }
 
         return response()->json(['success' => true, 'message' => 'Driver marked as served.']);
     }

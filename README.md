@@ -2,6 +2,15 @@
 
 A Laravel-based system for managing TODA drivers, vehicles, QR credentials, terminal entry and exit scans, attendance, reports, and operational settings.
 
+## Expo mobile notifications
+
+The mobile API supports authenticated Driver and Manager notification feeds at
+`GET /api/driver/notifications` and `GET /api/manager/notifications`.
+Signed-in devices register and remove Expo push tokens through the corresponding
+`/notifications/push-token` routes. Apply migrations after deployment with
+`php artisan migrate --force`. Push delivery uses the Expo Push Service and
+requires Android FCM v1 credentials configured for the Expo/EAS project.
+
 ## Overview
 
 This project is designed for a transport or fleet operation workflow where administrators can:

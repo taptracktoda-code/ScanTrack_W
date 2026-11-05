@@ -10,6 +10,7 @@ use App\Models\OrganizationEvent;
 use App\Models\QrCode;
 use App\Models\Trip;
 use App\Models\User;
+use App\Services\MobileNotificationService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -279,7 +280,7 @@ class DriverApiController extends Controller
         return $this->success('Trip details retrieved successfully.', $this->tripData($trip));
     }
 
-    public function startTrip(Request $request): JsonResponse
+    public function startTrip(Request $request, MobileNotificationService $notifications): JsonResponse
     {
         $attributes = $request->validate([
             'destination_id' => ['required', 'integer'],
@@ -331,6 +332,14 @@ class DriverApiController extends Controller
             ]);
         });
 
+        $notifications->notifyOrganizationManagers(
+            (int) $driver->organization_id,
+            'Driver trip started',
+            "{$driver->name} started a trip to {$trip->destination}.",
+            'trip',
+            ['screen' => 'history', 'driver_id' => $driver->id, 'trip_id' => $trip->trip_id],
+        );
+
         return response()->json([
             'success' => true,
             'message' => 'Trip started successfully.',
@@ -338,7 +347,7 @@ class DriverApiController extends Controller
         ], 201);
     }
 
-    public function completeTrip(Request $request, string $tripId): JsonResponse
+    public function completeTrip(Request $request, string $tripId, MobileNotificationService $notifications): JsonResponse
     {
         $driver = $this->driver($request->user());
         $trip = DB::transaction(function () use ($driver, $tripId): Trip {
@@ -361,6 +370,14 @@ class DriverApiController extends Controller
 
             return $trip->refresh();
         });
+
+        $notifications->notifyOrganizationManagers(
+            (int) $driver->organization_id,
+            'Driver trip completed',
+            "{$driver->name} completed a trip to {$trip->destination}.",
+            'trip',
+            ['screen' => 'history', 'driver_id' => $driver->id, 'trip_id' => $trip->trip_id],
+        );
 
         return $this->success('Trip completed successfully.', $this->tripData($trip));
     }

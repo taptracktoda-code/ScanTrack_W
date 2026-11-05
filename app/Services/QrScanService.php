@@ -7,9 +7,14 @@ use App\Models\QrCode;
 use App\Models\TerminalActivity;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
+use App\Services\MobileNotificationService;
 
 class QrScanService
 {
+    public function __construct(private readonly MobileNotificationService $notifications)
+    {
+    }
+
     public function handle(array $data): array
     {
         $identifier = trim((string) ($data['qr_identifier'] ?? ''));
@@ -96,6 +101,30 @@ class QrScanService
 
         $transactionType = $result['transaction_type'];
         $timestamp = $result['log']->scanned_at ?? $result['log']->created_at;
+        $isEntry = $transactionType === 'ENTRY';
+        $activity = $isEntry ? 'entered' : 'exited';
+        $notificationData = [
+            'screen' => 'attendance',
+            'driver_id' => $driver->id,
+        ];
+
+        $this->notifications->notifyDriver(
+            $driver,
+            $isEntry ? 'Terminal entry recorded' : 'Terminal exit recorded',
+            'Your QR scan was recorded successfully.',
+            'attendance',
+            $notificationData,
+        );
+
+        if (isset($data['organization_id'])) {
+            $this->notifications->notifyOrganizationManagers(
+                (int) $data['organization_id'],
+                $isEntry ? 'Driver entered terminal' : 'Driver exited terminal',
+                "{$driver->name} {$activity} the terminal.",
+                'attendance',
+                $notificationData,
+            );
+        }
 
         return [
             'success' => true,

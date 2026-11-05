@@ -6,6 +6,7 @@ namespace App\Models;
 use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
 
@@ -82,6 +83,11 @@ class User extends Authenticatable
     public function terminalActivities()
     {
         return $this->hasMany(TerminalActivity::class, 'admin_id');
+    }
+
+    public function expoPushTokens(): HasMany
+    {
+        return $this->hasMany(ExpoPushToken::class);
     }
 
     public function hasRole(string $role): bool
