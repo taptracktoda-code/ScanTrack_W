@@ -1,21 +1,27 @@
 <?php
 
-use App\Http\Controllers\Api\DriverApiController;
 use App\Http\Controllers\Api\AdminDriverApiController;
+use App\Http\Controllers\Api\DriverApiController;
 use App\Http\Controllers\Api\DriverPasswordOtpController;
+use App\Http\Controllers\Api\ManagerApiController;
 use App\Http\Controllers\Api\ManagerPasswordOtpController;
 use App\Http\Controllers\Api\PublicDriverRegistrationController;
 use App\Http\Controllers\Api\UserApiController;
+use App\Http\Controllers\AuthController;
+use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\ManagerController;
 use App\Http\Controllers\QrScanController;
 use App\Http\Controllers\ReportController;
+<<<<<<< HEAD
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\Api\ManagerApiController;
 use App\Http\Controllers\Api\MobileNotificationController;
+=======
+>>>>>>> ea73402 (fix bug)
 use Illuminate\Support\Facades\Route;
 
-
 Route::post('/login', [DriverApiController::class, 'login'])->middleware('throttle:5,1');
-Route::post('/admin/login', [\App\Http\Controllers\AuthController::class, 'adminLogin'])->middleware('throttle:5,1');
+Route::post('/admin/login', [AuthController::class, 'adminLogin'])->middleware('throttle:5,1');
 Route::post('/manager/login', [ManagerApiController::class, 'login'])->middleware('throttle:5,1');
 Route::post('/drivers/registration', [PublicDriverRegistrationController::class, 'store'])->middleware('throttle:10,1');
 Route::middleware('throttle:5,1')->prefix('driver/password/otp')->group(function () {
@@ -63,7 +69,7 @@ Route::middleware(['auth:sanctum', 'manager'])->prefix('manager')->group(functio
 });
 Route::middleware(['auth:sanctum', 'admin'])->prefix('admin')->group(function () {
     Route::get('/dashboard', [DashboardController::class, 'apiDashboard']);
-    Route::patch('/managers/{manager}/organization', [\App\Http\Controllers\ManagerController::class, 'assignOrganization']);
+    Route::patch('/managers/{manager}/organization', [ManagerController::class, 'assignOrganization']);
     Route::post('/qr/scan', [QrScanController::class, 'scan']);
 });
 

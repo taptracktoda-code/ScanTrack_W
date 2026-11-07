@@ -19,6 +19,7 @@ class QrScanRequest extends FormRequest
             'qr_token' => ['required_without:qr_identifier', 'string', 'max:32'],
             'qr_identifier' => ['required_without:qr_token', 'string', 'max:32'],
             'terminal_id' => ['nullable', 'string', 'max:255'],
+            'queue_action' => ['sometimes', 'in:join,exit'],
         ];
     }
 

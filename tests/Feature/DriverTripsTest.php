@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\Driver;
 use App\Models\DriverLog;
 use App\Models\OrganizationDestination;
+use App\Models\OrganizationQueueEntry;
 use App\Models\TodaOrganization;
 use App\Models\Trip;
 use App\Models\User;
@@ -182,6 +183,12 @@ class DriverTripsTest extends TestCase
 
     private function recordQrEntry(Driver $driver): void
     {
+        OrganizationQueueEntry::create([
+            'organization_id' => $driver->organization_id,
+            'driver_id' => $driver->id,
+            'queue_number' => 1,
+            'status' => 'WAITING',
+        ]);
         DriverLog::create([
             'driver_id' => $driver->id,
             'attendance_type' => 'ENTRY',

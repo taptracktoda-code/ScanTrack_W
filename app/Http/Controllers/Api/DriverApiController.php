@@ -7,10 +7,16 @@ use App\Models\Driver;
 use App\Models\DriverLog;
 use App\Models\OrganizationDestination;
 use App\Models\OrganizationEvent;
+use App\Models\OrganizationQueueEntry;
 use App\Models\QrCode;
+use App\Models\TodaOrganization;
 use App\Models\Trip;
 use App\Models\User;
+<<<<<<< HEAD
 use App\Services\MobileNotificationService;
+=======
+use App\Services\DriverQueueService;
+>>>>>>> ea73402 (fix bug)
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -171,6 +177,7 @@ class DriverApiController extends Controller
         return $this->success('Dashboard retrieved successfully.', [
             'driver' => $this->driverData($request->user()),
             'attendance' => $today,
+            'queue' => app(DriverQueueService::class)->snapshot($driver),
             'total_trips' => Trip::where('driver_id', $driver->id)->count(),
             'recent_records' => $this->records($driver, 4),
         ]);
@@ -313,6 +320,7 @@ class DriverApiController extends Controller
         }
 
         $trip = DB::transaction(function () use ($driver, $attributes, $destination): Trip {
+            TodaOrganization::whereKey($driver->organization_id)->lockForUpdate()->firstOrFail();
             Driver::query()->whereKey($driver->id)->lockForUpdate()->firstOrFail();
 
             if (Trip::query()->where('driver_id', $driver->id)->where('status', 'in_progress')->exists()) {
@@ -320,6 +328,25 @@ class DriverApiController extends Controller
                     'trip' => ['Complete your active trip before starting another one.'],
                 ]);
             }
+
+            $entry = OrganizationQueueEntry::where('organization_id', $driver->organization_id)
+                ->where('driver_id', $driver->id)->whereIn('status', ['WAITING', 'SERVING'])
+                ->lockForUpdate()->first();
+            if (! $entry) {
+                throw ValidationException::withMessages(['queue' => ['Have your manager scan your QR code to join the queue.']]);
+            }
+            $next = OrganizationQueueEntry::where('organization_id', $driver->organization_id)
+                ->where('status', 'WAITING')->orderBy('queue_number')->orderBy('id')->first();
+            if ($entry->status === 'WAITING' && $next?->id !== $entry->id) {
+                throw ValidationException::withMessages(['queue' => ['Wait until you are next in line before starting a trip.']]);
+            }
+            // Recheck attendance under the same lock as scanning and queue transitions.
+            $latestScan = DriverLog::where('driver_id', $driver->id)->whereDate('created_at', today())
+                ->latest('created_at')->latest('id')->first();
+            if ($latestScan?->attendance_type !== 'ENTRY' || $latestScan?->scan_method !== 'QR') {
+                throw ValidationException::withMessages(['qr_scan' => ['A current manager QR entry scan is required.']]);
+            }
+            $entry->update(['status' => 'SERVING', 'served_at' => now()]);
 
             return Trip::create([
                 'trip_id' => 'TRIP-'.strtoupper((string) Str::ulid()),
@@ -351,6 +378,8 @@ class DriverApiController extends Controller
     {
         $driver = $this->driver($request->user());
         $trip = DB::transaction(function () use ($driver, $tripId): Trip {
+            TodaOrganization::whereKey($driver->organization_id)->lockForUpdate()->firstOrFail();
+            Driver::whereKey($driver->id)->lockForUpdate()->firstOrFail();
             $trip = Trip::query()
                 ->where('driver_id', $driver->id)
                 ->where('trip_id', $tripId)
@@ -367,6 +396,10 @@ class DriverApiController extends Controller
                 'status' => 'completed',
                 'arrival_time' => now(),
             ]);
+
+            OrganizationQueueEntry::where('organization_id', $driver->organization_id)
+                ->where('driver_id', $driver->id)->where('status', 'SERVING')
+                ->update(['status' => 'COMPLETED', 'completed_at' => now()]);
 
             return $trip->refresh();
         });

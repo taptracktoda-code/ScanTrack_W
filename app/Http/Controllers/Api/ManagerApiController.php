@@ -10,8 +10,8 @@ use App\Models\OrganizationEvent;
 use App\Models\OrganizationQueueEntry;
 use App\Models\TerminalActivity;
 use App\Models\TodaOrganization;
+use App\Models\Trip;
 use App\Models\User;
-use App\Models\Vehicle;
 use App\Services\ManagerDriverAccountService;
 use App\Services\MobileNotificationService;
 use App\Services\QrScanService;
@@ -20,7 +20,6 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Storage;
-use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 
@@ -148,8 +147,11 @@ class ManagerApiController extends Controller
             ->get()
             ->keyBy('user_id');
 
+        $queueEntries = OrganizationQueueEntry::where('organization_id', $organization->id)
+            ->whereIn('status', ['WAITING', 'SERVING'])->orderBy('queue_number')->orderBy('id')->get()->unique('driver_id')->keyBy('driver_id');
+        $positions = $queueEntries->where('status', 'WAITING')->values()->mapWithKeys(fn ($entry, $index) => [$entry->driver_id => $index + 1]);
         $drivers = $drivers
-            ->map(function (Driver $driver) use ($driverUsers): array {
+            ->map(function (Driver $driver) use ($driverUsers, $queueEntries, $positions): array {
                 $shiftStatus = $driverUsers->get('DRIVER-'.strtoupper((string) $driver->id))?->shift_status ?: 'Available';
 
                 return [
@@ -158,6 +160,8 @@ class ManagerApiController extends Controller
                     'name' => $driver->name,
                     'vehicle_number' => $driver->vehicle_number,
                     'status' => $driver->status,
+                    'queue_status' => $queueEntries->get($driver->id)?->status,
+                    'queue_position' => $positions->get($driver->id),
                     'shift_status' => $shiftStatus,
                     'duty_status' => strcasecmp($shiftStatus, 'Off Duty') === 0 ? 'off_duty' : 'on_duty',
                 ];
@@ -363,6 +367,7 @@ class ManagerApiController extends Controller
         $data = $request->validated();
         $data['admin_id'] = $request->user()->id;
         $data['organization_id'] = $organization->id;
+        $data['queue_action'] = $data['queue_action'] ?? 'join';
         $result = $scanService->handle($data);
 
         return response()->json($result, $result['success'] ? 200 : 422);
@@ -574,6 +579,11 @@ class ManagerApiController extends Controller
         }
 
         DB::transaction(function () use ($entry, $organization, $request): void {
+            TodaOrganization::whereKey($organization->id)->lockForUpdate()->firstOrFail();
+            $entry = OrganizationQueueEntry::whereKey($entry->id)->lockForUpdate()->firstOrFail();
+            if ($entry->status !== 'SERVING' || Trip::where('driver_id', $entry->driver_id)->where('status', 'in_progress')->exists()) {
+                throw ValidationException::withMessages(['queue' => ['Complete the active trip before closing its queue entry.']]);
+            }
             $entry->update(['status' => 'COMPLETED', 'completed_at' => now()]);
             TerminalActivity::create([
                 'admin_id' => $request->user()->id,
