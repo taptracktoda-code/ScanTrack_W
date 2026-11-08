@@ -6,10 +6,10 @@
             <div>
                 <p class="section-kicker mb-2">Operations monitoring</p>
                 <h2 class="dashboard-page-title mb-2">System Health</h2>
-                <p class="dashboard-page-subtitle mb-0">Review server, database, storage, and attendance health at a glance.</p>
+                <p class="dashboard-page-subtitle mb-0">Checks this application endpoint, database queries, and local storage every 5 seconds while this page is visible.</p>
             </div>
             <div class="dashboard-pill-group d-flex flex-wrap gap-2">
-                <span class="dashboard-mini-pill"><i class="bi bi-calendar3 me-2"></i>{{ now()->format('F j, Y') }}</span>
+                <span class="dashboard-mini-pill"><i class="bi bi-arrow-repeat me-2"></i>Auto-refresh: 5s</span>
                 <button id="refresh-system-health" class="dashboard-mini-pill border-0" type="button">
                     <i class="bi bi-arrow-clockwise me-2"></i>
                     Refresh
@@ -30,7 +30,7 @@
                         <i class="bi bi-shield-check me-2"></i>
                         Loading...
                     </div>
-                    <button id="system-health-action-btn" class="btn btn-success" type="button">
+                    <button id="system-health-action-btn" class="btn btn-secondary" type="button">
                         <i class="bi bi-broadcast-pin me-2"></i>
                         System Check
                     </button>
@@ -40,6 +40,8 @@
     </section>
 
     <section class="mt-3">
+        <p id="system-health-freshness" class="text-muted mb-2" role="status" aria-live="polite">Waiting for the first check...</p>
+        <p class="text-muted small">These checks cover this app and its local storage; host resources and external services require separate monitoring.</p>
         <div id="system-health-reasons" class="d-flex flex-wrap gap-2"></div>
     </section>
 
@@ -58,7 +60,7 @@
                 <div class="col-md-6 col-xl-4">
                     <div class="stat-card card border-0 h-100">
                         <div class="card-body p-4">
-                            <div class="stat-label">Server Status</div>
+                            <div class="stat-label">Application Response</div>
                             <div class="stat-value" id="server-status">-</div>
                         </div>
                     </div>
@@ -74,7 +76,7 @@
                 <div class="col-md-6 col-xl-4">
                     <div class="stat-card card border-0 h-100">
                         <div class="card-body p-4">
-                            <div class="stat-label">Laravel API Status</div>
+                            <div class="stat-label">Health Endpoint</div>
                             <div class="stat-value" id="api-status">-</div>
                         </div>
                     </div>
@@ -82,7 +84,7 @@
                 <div class="col-md-6 col-xl-4">
                     <div class="stat-card card border-0 h-100">
                         <div class="card-body p-4">
-                            <div class="stat-label">Storage Status</div>
+                            <div class="stat-label">Local Storage Read / Write / Delete</div>
                             <div class="stat-value" id="storage-status">-</div>
                         </div>
                     </div>
@@ -122,8 +124,8 @@
                 <div class="col-md-6 col-xl-4">
                     <div class="stat-card card border-0 h-100">
                         <div class="card-body p-4">
-                            <div class="stat-label">Pending Logs Count</div>
-                            <div class="stat-value" id="pending-logs-count">-</div>
+                            <div class="stat-label">Total Attendance Logs</div>
+                            <div class="stat-value" id="total-logs-count">-</div>
                         </div>
                     </div>
                 </div>
@@ -154,111 +156,5 @@
 @endsection
 
 @push('scripts')
-    <script>
-        (() => {
-            const loadingElement = document.getElementById('system-health-loading');
-            const errorElement = document.getElementById('system-health-error');
-            const contentElement = document.getElementById('system-health-content');
-            const refreshButton = document.getElementById('refresh-system-health');
-            const statusLabel = document.getElementById('overall-status-label');
-            const statusPill = document.getElementById('overall-status-pill');
-            const actionButton = document.getElementById('system-health-action-btn');
-
-            const setStatus = (status) => {
-                const label = status || 'Healthy';
-                statusLabel.textContent = `Overall System Status: ${label}`;
-                statusPill.innerHTML = `<i class="bi ${label === 'Healthy' ? 'bi-shield-check' : label === 'Warning' ? 'bi-exclamation-triangle' : 'bi-shield-exclamation'} me-2"></i>${label}`;
-                statusPill.className = 'dashboard-mini-pill text-dark';
-
-                if (label === 'Healthy') {
-                    statusPill.classList.add('bg-success', 'text-white');
-                    actionButton.className = 'btn btn-success';
-                    actionButton.innerHTML = '<i class="bi bi-broadcast-pin me-2"></i>All Systems Good';
-                } else if (label === 'Warning') {
-                    statusPill.classList.add('bg-warning', 'text-dark');
-                    actionButton.className = 'btn btn-danger';
-                    actionButton.innerHTML = '<i class="bi bi-exclamation-triangle me-2"></i>Needs Attention';
-                } else {
-                    statusPill.classList.add('bg-danger', 'text-white');
-                    actionButton.className = 'btn btn-danger';
-                    actionButton.innerHTML = '<i class="bi bi-shield-exclamation me-2"></i>Critical Issue';
-                }
-            };
-
-            const renderHealth = (data) => {
-                document.getElementById('server-status').textContent = data.server;
-                document.getElementById('database-status').textContent = data.database;
-                document.getElementById('api-status').textContent = data.api;
-                document.getElementById('storage-status').textContent = data.storage;
-                document.getElementById('drivers-count').textContent = data.drivers;
-                document.getElementById('vehicles-count').textContent = data.vehicles;
-                document.getElementById('qr-codes-count').textContent = data.qr_codes;
-                document.getElementById('attendance-count').textContent = data.today_attendance;
-                document.getElementById('pending-logs-count').textContent = data.pending_logs;
-                document.getElementById('last-scan-driver').textContent = data.last_scan?.driver || 'N/A';
-                document.getElementById('last-scan-type').textContent = data.last_scan?.type || 'N/A';
-                document.getElementById('last-scan-time').textContent = data.last_scan?.time || 'N/A';
-                setStatus(data.overall_status);
-
-                // render reasons
-                const reasonsContainer = document.getElementById('system-health-reasons');
-                if (reasonsContainer) {
-                    reasonsContainer.innerHTML = '';
-                    const reasons = data.reasons || [];
-                    if (reasons.length === 0) {
-                        const span = document.createElement('div');
-                        span.className = 'dashboard-mini-pill';
-                        span.textContent = 'No issues detected';
-                        reasonsContainer.appendChild(span);
-                    } else {
-                        reasons.forEach((r) => {
-                            const badge = document.createElement('div');
-                            badge.className = 'dashboard-mini-pill';
-                            badge.style.border = '1px solid rgba(0,0,0,0.06)';
-                            badge.textContent = r;
-                            if ((data.overall_status || '').toLowerCase() === 'critical') {
-                                badge.classList.add('bg-danger', 'text-white');
-                            } else {
-                                badge.classList.add('bg-warning', 'text-dark');
-                            }
-                            reasonsContainer.appendChild(badge);
-                        });
-                    }
-                }
-            };
-
-            const loadHealth = async () => {
-                loadingElement.classList.remove('d-none');
-                contentElement.classList.add('d-none');
-                errorElement.classList.add('d-none');
-                refreshButton.disabled = true;
-
-                try {
-                    const response = await fetch('{{ route('system-health.api') }}', {
-                        headers: {
-                            Accept: 'application/json',
-                            'X-Requested-With': 'XMLHttpRequest',
-                        },
-                    });
-
-                    if (!response.ok) {
-                        throw new Error('Unable to load system health data.');
-                    }
-
-                    const data = await response.json();
-                    renderHealth(data);
-                    contentElement.classList.remove('d-none');
-                } catch (error) {
-                    errorElement.textContent = error.message || 'Unable to retrieve health information right now.';
-                    errorElement.classList.remove('d-none');
-                } finally {
-                    loadingElement.classList.add('d-none');
-                    refreshButton.disabled = false;
-                }
-            };
-
-            refreshButton.addEventListener('click', loadHealth);
-            loadHealth();
-        })();
-    </script>
+    <script src="{{ asset('js/system-health.js') }}" data-system-health-url="{{ route('system-health.api') }}" defer></script>
 @endpush
