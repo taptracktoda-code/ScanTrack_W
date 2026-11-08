@@ -12,11 +12,8 @@ use App\Models\QrCode;
 use App\Models\TodaOrganization;
 use App\Models\Trip;
 use App\Models\User;
-<<<<<<< HEAD
-use App\Services\MobileNotificationService;
-=======
 use App\Services\DriverQueueService;
->>>>>>> ea73402 (fix bug)
+use App\Services\MobileNotificationService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;

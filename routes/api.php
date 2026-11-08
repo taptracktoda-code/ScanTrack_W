@@ -5,6 +5,7 @@ use App\Http\Controllers\Api\DriverApiController;
 use App\Http\Controllers\Api\DriverPasswordOtpController;
 use App\Http\Controllers\Api\ManagerApiController;
 use App\Http\Controllers\Api\ManagerPasswordOtpController;
+use App\Http\Controllers\Api\MobileNotificationController;
 use App\Http\Controllers\Api\PublicDriverRegistrationController;
 use App\Http\Controllers\Api\UserApiController;
 use App\Http\Controllers\AuthController;
@@ -12,12 +13,6 @@ use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\ManagerController;
 use App\Http\Controllers\QrScanController;
 use App\Http\Controllers\ReportController;
-<<<<<<< HEAD
-use App\Http\Controllers\DashboardController;
-use App\Http\Controllers\Api\ManagerApiController;
-use App\Http\Controllers\Api\MobileNotificationController;
-=======
->>>>>>> ea73402 (fix bug)
 use Illuminate\Support\Facades\Route;
 
 Route::post('/login', [DriverApiController::class, 'login'])->middleware('throttle:5,1');
