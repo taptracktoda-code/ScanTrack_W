@@ -15,7 +15,16 @@ class MobileNotificationService
         string $type,
         array $data = [],
     ): void {
-        $user->notify(new ScanTrackNotification($title, $message, $type, $data));
+        $notification = new ScanTrackNotification($title, $message, $type, $data);
+        if (\Illuminate\Support\Facades\DB::transactionLevel() > 0) {
+            // Persist atomically; external pushes must wait until the queue transaction commits.
+            \Illuminate\Support\Facades\Notification::sendNow($user, $notification, ['database']);
+            \Illuminate\Support\Facades\DB::afterCommit(function () use ($user, $notification): void {
+                app(\App\Notifications\Channels\ExpoPushChannel::class)->send($user, $notification);
+            });
+        } else {
+            $user->notify($notification);
+        }
     }
 
     public function notifyDriver(
@@ -45,6 +54,7 @@ class MobileNotificationService
         User::query()
             ->whereRaw('LOWER(role) = ?', [strtolower(User::ROLE_MANAGER)])
             ->where('organization_id', $organizationId)
+            ->whereRaw('LOWER(status) = ?', ['active'])
             ->each(fn (User $manager) => $this->notifyUser($manager, $title, $message, $type, $data));
     }
 }

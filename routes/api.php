@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Api\AdminDriverApiController;
 use App\Http\Controllers\Api\TodaQueueController;
+use App\Http\Controllers\Api\MobileOperationsController;
 use App\Http\Controllers\Api\DriverApiController;
 use App\Http\Controllers\Api\DriverPasswordOtpController;
 use App\Http\Controllers\Api\ManagerApiController;
@@ -58,6 +59,9 @@ Route::middleware(['auth:sanctum', 'manager'])->prefix('manager')->group(functio
         Route::put('/schedules/{event}', [ManagerApiController::class, 'updateSchedule']);
         Route::delete('/schedules/{event}', [ManagerApiController::class, 'deleteSchedule']);
         Route::get('/queue/removals', [TodaQueueController::class, 'activity']);
+        Route::get('/reports/daily', [MobileOperationsController::class, 'report']);
+        Route::get('/issues', [MobileOperationsController::class, 'issues']);
+        Route::post('/issues/{issue}/decision', [MobileOperationsController::class, 'decide']);
         Route::post('/queue/{entry}/remove', [TodaQueueController::class, 'remove']);
         Route::get('/queue', [ManagerApiController::class, 'queue']);
         Route::post('/queue', [ManagerApiController::class, 'enqueueDriver']);
@@ -90,6 +94,8 @@ Route::middleware(['auth:sanctum', 'driver'])->prefix('driver')->group(function 
         Route::post('/shift-status', [DriverApiController::class, 'updateShiftStatus']);
         Route::get('/profile', [DriverApiController::class, 'profile']);
         Route::get('/toda', [TodaQueueController::class, 'myToda']);
+        Route::get('/issues', [MobileOperationsController::class, 'issues']);
+        Route::post('/issues', [MobileOperationsController::class, 'submit']);
         Route::get('/dashboard', [DriverApiController::class, 'dashboard']);
         Route::get('/attendance/today', [DriverApiController::class, 'todayAttendance']);
         Route::get('/attendance/monthly', [DriverApiController::class, 'monthlyAttendance']);

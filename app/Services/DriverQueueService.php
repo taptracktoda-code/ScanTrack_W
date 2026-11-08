@@ -34,6 +34,8 @@ class DriverQueueService
             'waiting_count' => $waiting->count(),
             'queue_number' => $own?->queue_number,
             'is_next' => $position === 1,
+            'drivers_ahead' => $position === null ? null : $position - 1,
+            'refreshed_at' => now()->toIso8601String(),
         ];
     }
 }

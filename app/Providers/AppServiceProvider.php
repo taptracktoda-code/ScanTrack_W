@@ -25,6 +25,9 @@ class AppServiceProvider extends ServiceProvider
     public function boot(): void
     {
         Schema::defaultStringLength(191);
+        \App\Models\OrganizationQueueEntry::observe(\App\Observers\QueueEntryObserver::class);
+        \App\Models\Trip::observe(\App\Observers\OrganizationSnapshotObserver::class);
+        \App\Models\DriverLog::observe(\App\Observers\OrganizationSnapshotObserver::class);
 
         Mail::extend('gmail', function (array $config = []): GmailApiTransport {
             $credentials = config('services.gmail');

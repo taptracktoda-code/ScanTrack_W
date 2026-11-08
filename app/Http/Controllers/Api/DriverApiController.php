@@ -176,6 +176,7 @@ class DriverApiController extends Controller
             'attendance' => $today,
             'queue' => app(DriverQueueService::class)->snapshot($driver),
             'total_trips' => Trip::where('driver_id', $driver->id)->count(),
+            'today_completed_trips' => $this->completedToday($driver->id),
             'recent_records' => $this->records($driver, 4),
         ]);
     }
@@ -418,10 +419,18 @@ class DriverApiController extends Controller
 
         return $this->success('Trip summary retrieved successfully.', [
             'total_trips' => (clone $trips)->count(),
+            'today_completed_trips' => $this->completedToday($this->driver($request->user())->id),
             'completed_trips' => (clone $trips)->where('status', 'completed')->count(),
             'cancelled_trips' => (clone $trips)->where('status', 'cancelled')->count(),
             'in_progress_trips' => (clone $trips)->where('status', 'in_progress')->count(),
         ]);
+    }
+
+    private function completedToday(int $driverId): int
+    {
+        [$start, $end] = \App\Services\PhilippineDay::bounds();
+        return Trip::where('driver_id', $driverId)->where('status', 'completed')
+            ->where('arrival_time', '>=', $start)->where('arrival_time', '<', $end)->count();
     }
 
     private function tripData(Trip $trip): array
