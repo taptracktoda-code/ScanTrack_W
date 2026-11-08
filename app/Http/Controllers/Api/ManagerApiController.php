@@ -161,6 +161,7 @@ class ManagerApiController extends Controller
                     'vehicle_number' => $driver->vehicle_number,
                     'status' => $driver->status,
                     'queue_status' => $queueEntries->get($driver->id)?->status,
+                    'queue_entry_id' => $queueEntries->get($driver->id)?->id,
                     'queue_position' => $positions->get($driver->id),
                     'shift_status' => $shiftStatus,
                     'duty_status' => strcasecmp($shiftStatus, 'Off Duty') === 0 ? 'off_duty' : 'on_duty',
@@ -481,6 +482,11 @@ class ManagerApiController extends Controller
 
         $entry = DB::transaction(function () use ($organization, $driver, $request): OrganizationQueueEntry {
             TodaOrganization::whereKey($organization->id)->lockForUpdate()->firstOrFail();
+            $lastEntry = OrganizationQueueEntry::where('organization_id', $organization->id)
+                ->where('driver_id', $driver->id)->latest('queue_number')->first();
+            if ($lastEntry?->removed_at !== null) {
+                throw ValidationException::withMessages(['driver_id' => ['Scan this returning driver\'s QR code to check in again and join the end of the queue.']]);
+            }
             $alreadyQueued = OrganizationQueueEntry::query()
                 ->where('organization_id', $organization->id)
                 ->where('driver_id', $driver->id)

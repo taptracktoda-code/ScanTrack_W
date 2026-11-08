@@ -20,6 +20,7 @@ class OrganizationQueueEntry extends Model
     protected $casts = [
         'served_at' => 'datetime',
         'completed_at' => 'datetime',
+        'removed_at' => 'datetime',
     ];
 
     public function organization()
