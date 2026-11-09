@@ -186,6 +186,41 @@ class MobileOperationsTest extends TestCase
         $this->assertDatabaseHas('organization_queue_entries', ['id' => $entry, 'status' => 'WAITING']);
     }
 
+    public function test_general_report_outside_queue_is_idempotent_and_approval_never_removes_new_queue_entry(): void
+    {
+        [, $manager, $driver, $account] = $this->fixture('GeneralIssue');
+        $payload = ['type' => 'other', 'explanation' => 'Concern about terminal facilities', 'client_request_id' => 'general-report'];
+        $this->actingAs($account, 'sanctum')->postJson('/api/driver/issues', [...$payload, 'explanation' => ' '])->assertUnprocessable();
+        foreach (['vehicle_breakdown', 'leave_queue'] as $type) {
+            $this->postJson('/api/driver/issues', [...$payload, 'type' => $type])->assertUnprocessable();
+        }
+        $issue = $this->postJson('/api/driver/issues', $payload)->assertCreated()->assertJsonPath('data.queue_entry_id', null)->json('data.id');
+        $this->postJson('/api/driver/issues', $payload)->assertCreated()->assertJsonPath('data.id', $issue);
+        $this->assertDatabaseCount('driver_issue_requests', 1);
+        $entry = $this->enqueue($manager, $driver);
+        $this->actingAs($manager, 'sanctum')->getJson('/api/manager/issues')->assertOk()->assertJsonPath('data.0.can_approve', true);
+        $decision = ['decision' => 'approved', 'decision_reason' => 'We will repair the facilities', 'confirm_removal' => false];
+        $this->postJson('/api/manager/issues/'.$issue.'/decision', $decision)->assertOk();
+        $this->postJson('/api/manager/issues/'.$issue.'/decision', $decision)->assertUnprocessable();
+        $this->assertDatabaseHas('driver_issue_requests', ['id' => $issue, 'status' => 'approved', 'queue_entry_id' => null]);
+        $this->assertDatabaseHas('organization_queue_entries', ['id' => $entry, 'status' => 'WAITING']);
+        $this->assertDatabaseMissing('driver_logs', ['driver_id' => $driver->id, 'attendance_type' => 'EXIT']);
+    }
+
+    public function test_general_report_is_scoped_to_toda_and_can_be_rejected(): void
+    {
+        [, $manager, , $account] = $this->fixture('GeneralScope');
+        [, $foreignManager, , $foreignAccount] = $this->fixture('GeneralForeign');
+        $issue = $this->actingAs($account, 'sanctum')->postJson('/api/driver/issues', [
+            'type' => 'other', 'explanation' => 'Terminal concern', 'queue_entry_id' => null, 'client_request_id' => 'general-scope',
+        ])->assertCreated()->json('data.id');
+        $this->actingAs($foreignAccount, 'sanctum')->getJson('/api/driver/issues')->assertOk()->assertJsonCount(0, 'data');
+        $decision = ['decision' => 'rejected', 'decision_reason' => 'Please provide more information'];
+        $this->actingAs($foreignManager, 'sanctum')->postJson('/api/manager/issues/'.$issue.'/decision', $decision)->assertNotFound();
+        $this->actingAs($manager, 'sanctum')->postJson('/api/manager/issues/'.$issue.'/decision', $decision)->assertOk();
+        $this->actingAs($account, 'sanctum')->getJson('/api/driver/issues')->assertOk()->assertJsonPath('data.0.status', 'rejected');
+    }
+
     public function test_stale_request_cannot_remove_a_new_checkin_and_rejection_keeps_queue_unchanged(): void
     {
         [$org, $manager, $driver, $account] = $this->fixture('Stale');

@@ -65,7 +65,7 @@ class MobileOperationsController extends Controller
         if (is_string($request->input('explanation'))) $request->merge(['explanation' => trim($request->input('explanation'))]);
         $attributes = $request->validate([
             'type' => ['required', 'in:vehicle_breakdown,leave_queue,other'], 'explanation' => ['required', 'string', 'max:500'],
-            'queue_entry_id' => ['required', 'integer'], 'client_request_id' => ['required', 'string', 'max:80'],
+            'queue_entry_id' => ['required_unless:type,other', 'nullable', 'integer'], 'client_request_id' => ['required', 'string', 'max:80'],
         ]);
         $driver = $this->driver($request);
         $issue = DB::transaction(function () use ($driver, $attributes, $notifications): DriverIssueRequest {
@@ -76,15 +76,18 @@ class MobileOperationsController extends Controller
                 abort_unless($replay->driver_id === $driver->id, 404);
                 return $replay;
             }
-            $entry = OrganizationQueueEntry::whereKey($attributes['queue_entry_id'])
-                ->where('driver_id', $driver->id)->where('organization_id', $driver->organization_id)->lockForUpdate()->firstOrFail();
-            if ($entry->status !== 'WAITING') throw ValidationException::withMessages(['queue' => ['Join the waiting queue before submitting this request.']]);
-            if (DriverIssueRequest::where('pending_entry_id', $entry->id)->exists()) {
-                throw ValidationException::withMessages(['queue' => ['You already have a pending request for this queue entry.']]);
+            $entry = null;
+            if (isset($attributes['queue_entry_id'])) {
+                $entry = OrganizationQueueEntry::whereKey($attributes['queue_entry_id'])
+                    ->where('driver_id', $driver->id)->where('organization_id', $driver->organization_id)->lockForUpdate()->firstOrFail();
+                if ($entry->status !== 'WAITING') throw ValidationException::withMessages(['queue' => ['Join the waiting queue before submitting this request.']]);
+                if (DriverIssueRequest::where('pending_entry_id', $entry->id)->exists()) {
+                    throw ValidationException::withMessages(['queue' => ['You already have a pending request for this queue entry.']]);
+                }
             }
             $issue = DriverIssueRequest::create([
                 ...$attributes, 'driver_id' => $driver->id, 'organization_id' => $driver->organization_id,
-                'pending_entry_id' => $entry->id, 'status' => 'pending',
+                'queue_entry_id' => $entry?->id, 'pending_entry_id' => $entry?->id, 'status' => 'pending',
             ]);
             $notifications->notifyOrganizationManagers((int) $driver->organization_id, 'Driver issue request',
                 $driver->name.' submitted a request for review.', 'system', ['screen' => 'issues', 'issue_id' => $issue->id]);
@@ -99,19 +102,22 @@ class MobileOperationsController extends Controller
         if (is_string($request->input('decision_reason'))) $request->merge(['decision_reason' => trim($request->input('decision_reason'))]);
         $attributes = $request->validate([
             'decision' => ['required', 'in:approved,rejected'], 'decision_reason' => ['required', 'string', 'max:500'],
-            'confirm_removal' => ['required_if:decision,approved', 'boolean', 'accepted_if:decision,approved'],
+            'confirm_removal' => $issue->queue_entry_id !== null
+                ? ['required_if:decision,approved', 'boolean', 'accepted_if:decision,approved']
+                : ['sometimes', 'boolean'],
         ]);
         DB::transaction(function () use ($request, $issue, $attributes, $removal, $notifications): void {
             TodaOrganization::whereKey($issue->organization_id)->lockForUpdate()->firstOrFail();
             $driver = Driver::whereKey($issue->driver_id)->lockForUpdate()->firstOrFail();
-            $entry = OrganizationQueueEntry::whereKey($issue->queue_entry_id)->lockForUpdate()->firstOrFail();
+            $entry = $issue->queue_entry_id !== null
+                ? OrganizationQueueEntry::whereKey($issue->queue_entry_id)->lockForUpdate()->firstOrFail() : null;
             $locked = DriverIssueRequest::whereKey($issue->id)->lockForUpdate()->firstOrFail();
             if ($locked->status !== 'pending') throw ValidationException::withMessages(['request' => ['This request has already been reviewed. Refresh to see the decision.']]);
             if ($attributes['decision'] === 'approved') {
-                if ((int) $driver->organization_id !== (int) $issue->organization_id || $entry->status !== 'WAITING') {
-                    throw ValidationException::withMessages(['queue' => ['The original entry is no longer waiting in your TODA. Refresh the request; it can be rejected with an explanation.']]);
+                if ((int) $driver->organization_id !== (int) $issue->organization_id || ($entry !== null && $entry->status !== 'WAITING')) {
+                    throw ValidationException::withMessages(['queue' => ['This request is no longer eligible for approval in your TODA. Refresh the request; it can be rejected with an explanation.']]);
                 }
-                $removal->remove($request->user(), $entry, 'other', $attributes['decision_reason']);
+                if ($entry !== null) $removal->remove($request->user(), $entry, 'other', $attributes['decision_reason']);
             }
             $locked->update(['status' => $attributes['decision'], 'decision_reason' => $attributes['decision_reason'],
                 'reviewed_by' => $request->user()->id, 'decided_at' => now(), 'pending_entry_id' => null]);
@@ -129,7 +135,7 @@ class MobileOperationsController extends Controller
             'created_at' => $issue->created_at?->toIso8601String(), 'decided_at' => $issue->decided_at?->toIso8601String(),
             'decision_reason' => $issue->decision_reason, 'manager_name' => $issue->reviewer?->name,
             'queue_status' => $issue->queueEntry?->status,
-            'can_approve' => $issue->status === 'pending' && $issue->queueEntry?->status === 'WAITING'
+            'can_approve' => $issue->status === 'pending' && ($issue->queue_entry_id === null || $issue->queueEntry?->status === 'WAITING')
                 && (int) $issue->driver?->organization_id === (int) $issue->organization_id,
         ];
     }
