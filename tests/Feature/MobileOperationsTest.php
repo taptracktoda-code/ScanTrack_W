@@ -3,8 +3,8 @@
 namespace Tests\Feature;
 
 use App\Models\Driver;
-use App\Models\DriverIssueRequest;
 use App\Models\DriverLog;
+use App\Models\ExpoPushToken;
 use App\Models\OrganizationQueueEntry;
 use App\Models\TodaOrganization;
 use App\Models\Trip;
@@ -12,13 +12,52 @@ use App\Models\User;
 use App\Services\NextInLineService;
 use App\Services\PhilippineDay;
 use Carbon\CarbonImmutable;
+use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Schema;
 use Tests\TestCase;
 
 class MobileOperationsTest extends TestCase
 {
     use RefreshDatabase;
+
+    public function test_partial_mobile_migration_recovers_report_apis_without_overwriting_history(): void
+    {
+        [$org, $manager, $driver, $account] = $this->fixture('Recovery');
+        [$other] = $this->fixture('RecoveryOther');
+        $this->trip($driver, 'snapshot', '2026-11-08 10:00:00');
+        $driver->update(['organization_id' => $other->id]);
+        $this->trip($driver, 'legacy', '2026-11-08 11:00:00');
+        DB::table('trips')->where('trip_id', 'legacy')->update(['organization_id' => null]);
+        DriverLog::create(['driver_id' => $driver->id, 'attendance_type' => 'ENTRY']);
+        DB::table('driver_logs')->where('driver_id', $driver->id)->update(['organization_id' => null]);
+
+        // Reproduce MySQL having committed columns before the issue table was created.
+        Schema::drop('driver_issue_requests');
+        Schema::table('trips', fn (Blueprint $table) => $table->dropIndex(['organization_id', 'created_at']));
+        $migration = require database_path('migrations/2026_11_08_000002_add_mobile_operations.php');
+        $migration->up();
+        $migration->up();
+
+        $this->assertTrue(Schema::hasIndex('trips', ['organization_id', 'created_at']));
+        $this->assertDatabaseHas('trips', ['trip_id' => 'snapshot', 'organization_id' => $org->id]);
+        $this->assertDatabaseHas('trips', ['trip_id' => 'legacy', 'organization_id' => $other->id]);
+        $this->assertDatabaseHas('driver_logs', ['driver_id' => $driver->id, 'organization_id' => $other->id]);
+        $this->actingAs($manager, 'sanctum')->getJson('/api/manager/reports/daily?date=2026-11-08')
+            ->assertOk()->assertJsonPath('data.completed_trips', 1);
+        $driver->update(['organization_id' => $org->id]);
+        $entry = $this->enqueue($manager, $driver);
+        $issue = $this->actingAs($account, 'sanctum')->postJson('/api/driver/issues', [
+            'type' => 'vehicle_breakdown', 'explanation' => 'Flat tire',
+            'queue_entry_id' => $entry, 'client_request_id' => 'recovery-request',
+        ])->assertCreated()->json('data.id');
+        $migration->up();
+        $this->getJson('/api/driver/issues')->assertOk()->assertJsonPath('data.0.id', $issue);
+        $this->actingAs($manager, 'sanctum')->getJson('/api/manager/issues')
+            ->assertOk()->assertJsonPath('data.0.id', $issue)->assertJsonPath('pending_count', 1);
+    }
 
     public function test_daily_counts_use_completion_time_and_philippine_midnight_without_resetting_history(): void
     {
@@ -68,7 +107,9 @@ class MobileOperationsTest extends TestCase
         [, , $second, $secondAccount] = $this->fixture('Second', $org, $manager);
         $entry = $this->enqueue($manager, $first);
         $this->enqueue($manager, $second);
-        for ($i = 0; $i < 3; $i++) app(NextInLineService::class)->notify($org->id);
+        for ($i = 0; $i < 3; $i++) {
+            app(NextInLineService::class)->notify($org->id);
+        }
         $this->assertSame(1, $this->nextCount($firstAccount));
         $this->assertSame(0, $this->nextCount($secondAccount));
         $this->actingAs($secondAccount, 'sanctum')->getJson('/api/driver/dashboard')->assertOk()->assertJsonPath('data.queue.drivers_ahead', 1);
@@ -90,17 +131,18 @@ class MobileOperationsTest extends TestCase
         $this->assertSame(1, $this->nextCount($firstAccount));
         $this->assertDatabaseHas('organization_queue_entries', ['id' => $firstEntry, 'status' => 'SERVING']);
         [, , $third, $thirdAccount] = $this->fixture('Rollback', $org, $manager);
-        \Illuminate\Support\Facades\Http::fake();
-        \App\Models\ExpoPushToken::create(['user_id' => $thirdAccount->id, 'token' => 'ExpoPushToken[rollback123]']);
+        Http::fake();
+        ExpoPushToken::create(['user_id' => $thirdAccount->id, 'token' => 'ExpoPushToken[rollback123]']);
         try {
             DB::transaction(function () use ($org, $third): void {
                 OrganizationQueueEntry::where('organization_id', $org->id)->update(['status' => 'COMPLETED']);
                 OrganizationQueueEntry::create(['organization_id' => $org->id, 'driver_id' => $third->id, 'queue_number' => 3, 'status' => 'WAITING']);
                 throw new \RuntimeException('rollback');
             });
-        } catch (\RuntimeException) {}
+        } catch (\RuntimeException) {
+        }
         $this->assertSame(0, $this->nextCount($thirdAccount));
-        \Illuminate\Support\Facades\Http::assertNothingSent();
+        Http::assertNothingSent();
         OrganizationQueueEntry::where('organization_id', $org->id)->update(['status' => 'COMPLETED']);
         $this->enqueue($manager, $third);
         $this->assertSame(1, $this->nextCount($thirdAccount));
@@ -184,6 +226,7 @@ class MobileOperationsTest extends TestCase
         $manager ??= User::factory()->create(['role' => 'Manager', 'status' => 'Active', 'organization_id' => $org->id, 'must_change_password' => false]);
         $driver = Driver::create(['name' => $name, 'license_number' => 'LIC-'.$name, 'contact_number' => '09170000000', 'vehicle_number' => 'PLATE-'.$name, 'status' => 'Active', 'organization_id' => $org->id]);
         $account = User::factory()->create(['role' => 'Driver', 'user_id' => 'DRIVER-'.$driver->id, 'status' => 'Active', 'must_change_password' => false]);
+
         return [$org, $manager, $driver, $account];
     }
 }

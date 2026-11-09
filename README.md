@@ -7,8 +7,8 @@ A Laravel-based system for managing TODA drivers, vehicles, QR credentials, term
 The mobile API supports authenticated Driver and Manager notification feeds at
 `GET /api/driver/notifications` and `GET /api/manager/notifications`.
 Signed-in devices register and remove Expo push tokens through the corresponding
-`/notifications/push-token` routes. Apply migrations after deployment with
-`php artisan migrate --force`. Push delivery uses the Expo Push Service and
+`/notifications/push-token` routes. Railway applies pending migrations during
+pre-deploy; other hosts can use `php artisan migrate --force`. Push delivery uses the Expo Push Service and
 requires Android FCM v1 credentials configured for the Expo/EAS project.
 
 ## Overview
@@ -230,7 +230,9 @@ The Docker build retains PHP Apache's `mpm_prefork` module, disables only detect
 
 ### First deployment and migrations
 
-Do not run migrations automatically at startup. Review and back up the target database first; then, in the Railway web service's shell/console (not a local shell), run:
+`railway.json` runs `php artisan migrate --force --no-interaction` as Railway's pre-deploy command. Pending migrations complete before the new web container starts; a failed migration stops that deployment. The Apache entrypoint does not run migrations on process restarts. Review pending migrations and back up the target database before deploying.
+
+For an existing deployment missing tables such as `driver_issue_requests`, deploy this release or run the following in the Railway web service's shell/console (not a local shell):
 
 ```sh
 php artisan migrate:status
@@ -262,7 +264,7 @@ Restore only into a deliberately selected database, after confirming the target 
 mysql --host="<DB_HOST>" --port="<DB_PORT>" --user="<DB_USERNAME>" --password "<DB_DATABASE>" < taptrack-backup.sql
 ```
 
-Back up the Railway Volume's uploaded files separately using an approved encrypted off-service backup process; volume contents are not included in the MySQL dump or the application image. Test database and file restores before relying on them. Before each release, back up the database, deploy the new image, and apply reviewed forward migrations manually. Roll back application code by redeploying a known-good image; do not blindly run `migrate:rollback` against production.
+Back up the Railway Volume's uploaded files separately using an approved encrypted off-service backup process; volume contents are not included in the MySQL dump or the application image. Test database and file restores before relying on them. Before each release, review pending forward migrations, back up the database, and deploy the new image; Railway applies the migrations during pre-deploy. Roll back application code by redeploying a known-good image; do not blindly run `migrate:rollback` against production.
 
 ### Verify the deployment
 

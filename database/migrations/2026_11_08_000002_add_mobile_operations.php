@@ -9,38 +9,51 @@ return new class extends Migration
 {
     public function up(): void
     {
-        Schema::table('organization_queue_entries', function (Blueprint $table): void {
-            $table->timestamp('next_notified_at')->nullable();
-        });
-        foreach (['trips', 'driver_logs'] as $name) {
-            Schema::table($name, function (Blueprint $table): void {
-                $table->foreignId('organization_id')->nullable()->constrained('toda_organizations')->nullOnDelete();
-                $table->index(['organization_id', 'created_at']);
+        if (! Schema::hasColumn('organization_queue_entries', 'next_notified_at')) {
+            Schema::table('organization_queue_entries', function (Blueprint $table): void {
+                $table->timestamp('next_notified_at')->nullable();
             });
+        }
+        foreach (['trips', 'driver_logs'] as $name) {
+            // MySQL commits DDL immediately, so a failed deployment may have added
+            // some of these columns before Laravel recorded the migration.
+            if (! Schema::hasColumn($name, 'organization_id')) {
+                Schema::table($name, function (Blueprint $table): void {
+                    $table->foreignId('organization_id')->nullable()->constrained('toda_organizations')->nullOnDelete();
+                });
+            }
+            if (! Schema::hasIndex($name, ['organization_id', 'created_at'])) {
+                Schema::table($name, function (Blueprint $table): void {
+                    $table->index(['organization_id', 'created_at']);
+                });
+            }
             // Legacy records have no organization snapshot; use their driver's known assignment.
-            DB::table($name)->orderBy('id')->chunkById(500, function ($rows) use ($name): void {
+            DB::table($name)->whereNull('organization_id')->chunkById(500, function ($rows) use ($name): void {
                 $organizations = DB::table('drivers')->whereIn('id', $rows->pluck('driver_id'))->pluck('organization_id', 'id');
                 foreach ($rows as $row) {
-                    DB::table($name)->where('id', $row->id)->update(['organization_id' => $organizations[$row->driver_id] ?? null]);
+                    DB::table($name)->where('id', $row->id)->whereNull('organization_id')
+                        ->update(['organization_id' => $organizations[$row->driver_id] ?? null]);
                 }
             });
         }
-        Schema::create('driver_issue_requests', function (Blueprint $table): void {
-            $table->id();
-            $table->foreignId('organization_id')->constrained('toda_organizations')->cascadeOnDelete();
-            $table->foreignId('driver_id')->constrained('drivers')->cascadeOnDelete();
-            $table->foreignId('queue_entry_id')->constrained('organization_queue_entries')->cascadeOnDelete();
-            $table->foreignId('pending_entry_id')->nullable()->unique()->constrained('organization_queue_entries')->cascadeOnDelete();
-            $table->string('client_request_id', 80)->unique();
-            $table->string('type', 30);
-            $table->text('explanation');
-            $table->string('status', 20)->default('pending');
-            $table->text('decision_reason')->nullable();
-            $table->foreignId('reviewed_by')->nullable()->constrained('admins')->nullOnDelete();
-            $table->timestamp('decided_at')->nullable();
-            $table->timestamps();
-            $table->index(['organization_id', 'status', 'id']);
-        });
+        if (! Schema::hasTable('driver_issue_requests')) {
+            Schema::create('driver_issue_requests', function (Blueprint $table): void {
+                $table->id();
+                $table->foreignId('organization_id')->constrained('toda_organizations')->cascadeOnDelete();
+                $table->foreignId('driver_id')->constrained('drivers')->cascadeOnDelete();
+                $table->foreignId('queue_entry_id')->constrained('organization_queue_entries')->cascadeOnDelete();
+                $table->foreignId('pending_entry_id')->nullable()->unique()->constrained('organization_queue_entries')->cascadeOnDelete();
+                $table->string('client_request_id', 80)->unique();
+                $table->string('type', 30);
+                $table->text('explanation');
+                $table->string('status', 20)->default('pending');
+                $table->text('decision_reason')->nullable();
+                $table->foreignId('reviewed_by')->nullable()->constrained('admins')->nullOnDelete();
+                $table->timestamp('decided_at')->nullable();
+                $table->timestamps();
+                $table->index(['organization_id', 'status', 'id']);
+            });
+        }
     }
 
     public function down(): void
