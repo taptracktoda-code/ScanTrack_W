@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Driver;
 use App\Models\DriverLog;
+use App\Models\DriverIssueRequest;
 use App\Models\User;
 use App\Models\Setting;
 use App\Models\TerminalActivity;
@@ -52,8 +53,22 @@ class DashboardController extends Controller
                     ->filter()
                     ->implode(' · '),
                 'created_at' => $activity->created_at?->diffForHumans(),
+                'read_key' => $activity->created_at?->getTimestampMs(),
             ])
             ->values();
+
+        if ($request->user()->isManager()) {
+            $reports = DriverIssueRequest::with('driver')->where('organization_id', $request->user()->organization_id)
+                ->latest('id')->limit(8)->get()->map(fn ($report) => [
+                    'id' => 'report-'.$report->id,
+                    'title' => 'Driver report submitted',
+                    'description' => ($report->driver?->name ?? 'Driver').': '.$report->explanation,
+                    'created_at' => $report->created_at->diffForHumans(),
+                    'read_key' => $report->created_at->getTimestampMs(),
+                    'url' => route('manager.reports.show', $report),
+                ]);
+            $notifications = $notifications->concat($reports)->sortByDesc('read_key')->take(8)->values();
+        }
 
         return response()->json(['notifications' => $notifications]);
     }

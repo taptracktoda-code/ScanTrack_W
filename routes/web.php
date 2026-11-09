@@ -15,6 +15,10 @@ use App\Http\Controllers\ManagerPortalController;
 use App\Http\Controllers\ManagerSessionController;
 use App\Http\Controllers\DriverVerificationController;
 use App\Http\Controllers\QueueMonitoringController;
+use App\Http\Controllers\ManagerReportController;
+
+Route::get('/reports/{issue}/attachments/{attachment}', [ManagerReportController::class, 'attachment'])
+    ->middleware('signed')->name('reports.attachments.show');
 
 Route::middleware('guest')->group(function () {
     Route::get('/login', [AuthController::class, 'showLogin'])->name('login');
@@ -42,6 +46,8 @@ Route::middleware(['auth', 'manager'])->prefix('manager')->name('manager.')->gro
         Route::get('/attendance', [ManagerPortalController::class, 'attendance'])->name('attendance');
         Route::get('/reports', [ManagerPortalController::class, 'reports'])->name('reports');
         Route::get('/reports/export', [ManagerPortalController::class, 'exportReports'])->name('reports.export');
+        Route::get('/reports/{issue}', [ManagerReportController::class, 'show'])->name('reports.show');
+        Route::post('/reports/{issue}/review', [ManagerReportController::class, 'review'])->name('reports.review');
         Route::get('/organization', [ManagerPortalController::class, 'organization'])->name('organization');
         Route::get('/profile', [ManagerPortalController::class, 'profile'])->name('profile');
         Route::put('/profile', [ManagerPortalController::class, 'updateProfile'])->name('profile.update');

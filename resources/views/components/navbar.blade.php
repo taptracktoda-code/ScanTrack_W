@@ -55,7 +55,7 @@
                 const notificationBadge = document.getElementById('navbar-notification-badge');
                 const notificationList = document.getElementById('navbar-notification-list');
                 const notificationEndpoint = @json(route(auth()->user()?->isManager() ? 'manager.notifications.feed' : 'notifications.feed'));
-                const notificationStorageKey = 'dashboardLastReadActivityId';
+                const notificationStorageKey = @json('dashboardLastReadActivityTime:'.auth()->id());
                 let latestNotificationId = 0;
 
                 const refreshNotifications = async () => {
@@ -69,9 +69,9 @@
 
                         const payload = await response.json();
                         const notifications = payload.notifications || [];
-                        latestNotificationId = Math.max(0, ...notifications.map((item) => Number(item.id) || 0));
+                        latestNotificationId = Math.max(0, ...notifications.map((item) => Number(item.read_key ?? item.id) || 0));
                         const lastReadId = Number(window.localStorage.getItem(notificationStorageKey) || 0);
-                        const unreadCount = notifications.filter((item) => Number(item.id) > lastReadId).length;
+                        const unreadCount = notifications.filter((item) => Number(item.read_key ?? item.id) > lastReadId).length;
                         notificationBadge.textContent = String(unreadCount);
                         notificationBadge.classList.toggle('d-none', unreadCount === 0);
                         document.getElementById('navbar-notifications-toggle')?.setAttribute(
@@ -89,8 +89,9 @@
                         }
 
                         notifications.forEach((item) => {
-                            const row = document.createElement('div');
-                            row.className = 'px-3 py-3 border-bottom';
+                            const row = document.createElement(item.url ? 'a' : 'div');
+                            row.className = 'd-block text-decoration-none text-reset px-3 py-3 border-bottom';
+                            if (item.url) row.href = item.url;
                             const title = document.createElement('div');
                             title.className = 'fw-semibold small';
                             title.textContent = item.title || 'System activity';

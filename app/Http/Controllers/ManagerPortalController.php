@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Driver;
 use App\Models\DriverLog;
+use App\Models\DriverIssueRequest;
 use App\Models\QrCode;
 use App\Models\TodaOrganization;
 use App\Models\User;
@@ -12,6 +13,7 @@ use App\Services\ManagerDriverAccountService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
 use Illuminate\View\View;
 
@@ -227,13 +229,30 @@ class ManagerPortalController extends Controller
 
     public function reports(Request $request): View
     {
+        $filters = $request->validate([
+            'search' => ['nullable', 'string', 'max:200'],
+            'status' => ['nullable', 'in:pending,approved,rejected'],
+            'date' => ['nullable', 'date_format:Y-m-d'],
+        ]);
         $organization = $this->assignedOrganization($request->user());
+        $reports = DriverIssueRequest::with('driver')->where('organization_id', $organization->id)
+            ->when($request->filled('status'), fn ($query) => $query->where('status', $filters['status']))
+            ->when($request->filled('date'), function ($query) use ($filters) {
+                [$start, $end] = \App\Services\PhilippineDay::bounds($filters['date']);
+                $query->where('created_at', '>=', $start)->where('created_at', '<', $end);
+            })
+            ->when($request->filled('search'), function ($query) use ($filters) {
+                $term = '%'.$filters['search'].'%';
+                $query->where(fn ($q) => $q->where('explanation', 'like', $term)
+                    ->orWhereHas('driver', fn ($driver) => $driver->where('name', 'like', $term)));
+            })->latest('id')->paginate(15)->withQueryString();
         $drivers = Driver::query()->where('organization_id', $organization->id);
         $vehicles = Vehicle::query()->where('organization_id', $organization->id);
         $logs = DriverLog::query()->whereHas('driver', fn ($query) => $query->where('organization_id', $organization->id));
 
         return view('managers.portal.reports', [
             'organization' => $organization,
+            'reports' => $reports,
             'totalDrivers' => (clone $drivers)->count(),
             'activeDrivers' => (clone $drivers)->where('status', 'Active')->count(),
             'totalVehicles' => (clone $vehicles)->count(),
@@ -354,8 +373,29 @@ class ManagerPortalController extends Controller
             'email' => ['required', 'email', 'max:255', Rule::unique('admins', 'email')->ignore($manager->id)],
             'contact' => ['required', 'string', 'max:40'],
             'address' => ['nullable', 'string', 'max:1000'],
+            'profile_picture' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:2048'],
+            'remove_picture' => ['sometimes', 'boolean'],
         ]);
-        $manager->update([...$attributes, 'name' => $this->fullName($attributes)]);
+        $previousPicture = $manager->profile_picture;
+        unset($attributes['profile_picture'], $attributes['remove_picture']);
+        $path = null;
+        if ($request->hasFile('profile_picture')) {
+            $path = $request->file('profile_picture')->store('profile-pictures', 'public');
+            if (! $path) return back()->withErrors(['profile_picture' => 'The profile photo could not be saved. Please try again.'])->withInput();
+            $attributes['profile_picture'] = $path;
+        } elseif ($request->boolean('remove_picture')) {
+            $attributes['profile_picture'] = null;
+        }
+        try {
+            $manager->forceFill([...$attributes, 'name' => $this->fullName($attributes)])->save();
+        } catch (\Throwable $exception) {
+            if ($path) Storage::disk('public')->delete($path);
+            report($exception);
+            return back()->withErrors(['profile' => 'Your profile could not be saved. Please try again.'])->withInput();
+        }
+        if (array_key_exists('profile_picture', $attributes) && $previousPicture && $previousPicture !== $attributes['profile_picture']) {
+            Storage::disk('public')->delete($previousPicture);
+        }
 
         return redirect()->route('manager.profile')->with('status', 'Profile updated.');
     }

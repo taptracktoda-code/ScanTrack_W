@@ -52,6 +52,7 @@ WORKDIR /var/www/html
 
 COPY . .
 COPY --from=frontend /app/public/build ./public/build
+COPY docker/uploads.ini /usr/local/etc/php/conf.d/uploads.ini
 
 RUN sed -ri "s!/var/www/html!${APACHE_DOCUMENT_ROOT}!g" \
         /etc/apache2/sites-available/*.conf \

@@ -40,6 +40,9 @@ class MobileOperationsTest extends TestCase
         $migration = require database_path('migrations/2026_11_08_000002_add_mobile_operations.php');
         $migration->up();
         $migration->up();
+        // Apply later schema changes after recreating the original issue table.
+        (require database_path('migrations/2026_11_09_000001_allow_general_driver_reports.php'))->up();
+        (require database_path('migrations/2026_11_09_000002_add_report_attachments.php'))->up();
 
         $this->assertTrue(Schema::hasIndex('trips', ['organization_id', 'created_at']));
         $this->assertDatabaseHas('trips', ['trip_id' => 'snapshot', 'organization_id' => $org->id]);
