@@ -64,7 +64,7 @@ class MobileOperationsController extends Controller
     {
         if (is_string($request->input('explanation'))) $request->merge(['explanation' => trim($request->input('explanation'))]);
         $attributes = $request->validate([
-            'type' => ['required', 'in:vehicle_breakdown,leave_queue'], 'explanation' => ['required', 'string', 'max:500'],
+            'type' => ['required', 'in:vehicle_breakdown,leave_queue,other'], 'explanation' => ['required', 'string', 'max:500'],
             'queue_entry_id' => ['required', 'integer'], 'client_request_id' => ['required', 'string', 'max:80'],
         ]);
         $driver = $this->driver($request);

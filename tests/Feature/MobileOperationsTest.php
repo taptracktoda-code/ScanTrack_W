@@ -173,6 +173,19 @@ class MobileOperationsTest extends TestCase
         $this->assertTrue($manager->notifications()->get()->contains(fn ($n) => $n->data['title'] === 'Driver issue request'));
     }
 
+    public function test_other_issue_requires_reason_and_is_visible_to_manager(): void
+    {
+        [, $manager, $driver, $account] = $this->fixture('OtherIssue');
+        $entry = $this->enqueue($manager, $driver);
+        $payload = ['type' => 'other', 'explanation' => '   ', 'queue_entry_id' => $entry, 'client_request_id' => 'other-request'];
+        $this->actingAs($account, 'sanctum')->postJson('/api/driver/issues', $payload)->assertUnprocessable();
+        $this->postJson('/api/driver/issues', [...$payload, 'explanation' => ' Family emergency '])
+            ->assertCreated()->assertJsonPath('data.type', 'other')->assertJsonPath('data.explanation', 'Family emergency');
+        $this->actingAs($manager, 'sanctum')->getJson('/api/manager/issues')->assertOk()
+            ->assertJsonPath('data.0.type', 'other')->assertJsonPath('data.0.explanation', 'Family emergency');
+        $this->assertDatabaseHas('organization_queue_entries', ['id' => $entry, 'status' => 'WAITING']);
+    }
+
     public function test_stale_request_cannot_remove_a_new_checkin_and_rejection_keeps_queue_unchanged(): void
     {
         [$org, $manager, $driver, $account] = $this->fixture('Stale');
