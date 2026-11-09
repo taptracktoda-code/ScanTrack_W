@@ -8,6 +8,7 @@
             <p class="dashboard-page-subtitle mb-0">{{ $organization->name }}</p>
         </div>
     </section>
+    @if ($errors->any())<div class="alert alert-danger" role="alert">{{ $errors->first() }}</div>@endif
     <section class="card dashboard-card border-0 shadow-sm">
         <form method="GET" action="{{ route('manager.attendance') }}" class="row g-3 p-3 border-bottom">
             <div class="col-md-3"><label class="form-label" for="filter-driver">Driver</label><select class="form-select" id="filter-driver" name="driver_id"><option value="">All drivers</option>@foreach ($drivers as $driver)<option value="{{ $driver->id }}" @selected(($filters['driver_id'] ?? '') == $driver->id)>{{ $driver->name }}</option>@endforeach</select></div>
@@ -18,10 +19,10 @@
         </form>
         <div class="table-responsive">
             <table class="table table-hover align-middle mb-0">
-                <thead><tr><th class="ps-3">Driver</th><th>Type</th><th>Method</th><th>Recorded at</th></tr></thead>
+                <thead><tr><th class="ps-3">Driver</th><th>Type</th><th>Method</th><th>Recorded at (Manila)</th></tr></thead>
                 <tbody>
                     @forelse ($records as $record)
-                        <tr><td class="ps-3">{{ $record->driver?->name ?? 'Unknown driver' }}</td><td>{{ $record->attendance_type }}</td><td>{{ $record->scan_method }}</td><td>{{ optional($record->scanned_at ?: $record->created_at)->format('M j, Y H:i:s') }}</td></tr>
+                        <tr><td class="ps-3">{{ $record->driver?->name ?? 'Unknown driver' }}</td><td>{{ $record->attendance_type }}</td><td>{{ $record->scan_method }}</td><td>{{ optional($record->scanned_at ?: $record->created_at)->timezone('Asia/Manila')?->format('M j, Y H:i:s') }}</td></tr>
                     @empty
                         <tr><td colspan="4" class="text-center text-muted py-4">No attendance records match these filters.</td></tr>
                     @endforelse

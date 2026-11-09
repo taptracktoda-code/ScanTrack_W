@@ -10,6 +10,7 @@ use App\Models\TodaOrganization;
 use App\Models\User;
 use App\Models\Vehicle;
 use App\Services\ManagerDriverAccountService;
+use App\Services\PhilippineDay;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -21,10 +22,15 @@ class ManagerPortalController extends Controller
 {
     public function drivers(Request $request): View
     {
+        $filters = $request->validate([
+            'search' => ['nullable', 'string', 'max:200'],
+            'status' => ['nullable', 'in:Active,Inactive,Pending,Rejected'],
+        ]);
         $organization = $this->assignedOrganization($request->user());
         $drivers = Driver::query()
             ->where('organization_id', $organization->id)
             ->with('qrCode')
+            ->when(isset($filters['status']), fn ($query) => $query->where('status', $filters['status']))
             ->when($request->filled('search'), function ($query) use ($request): void {
                 $term = trim((string) $request->query('search'));
                 $query->where(fn ($driverQuery) => $driverQuery
@@ -36,7 +42,7 @@ class ManagerPortalController extends Controller
             ->paginate(15)
             ->withQueryString();
 
-        return view('managers.portal.drivers', compact('organization', 'drivers'));
+        return view('managers.portal.drivers', compact('organization', 'drivers', 'filters'));
     }
 
     public function storeDriver(Request $request, ManagerDriverAccountService $driverAccounts): RedirectResponse
@@ -164,14 +170,17 @@ class ManagerPortalController extends Controller
 
     public function qrManagement(Request $request): View
     {
+        $filters = $request->validate(['status' => ['nullable', 'in:Active,Inactive']]);
         $organization = $this->assignedOrganization($request->user());
         $qrCodes = QrCode::query()
             ->whereHas('driver', fn ($query) => $query->where('organization_id', $organization->id))
             ->with('driver')
+            ->when(isset($filters['status']), fn ($query) => $query->where('status', $filters['status']))
             ->latest()
-            ->paginate(15);
+            ->paginate(15)
+            ->withQueryString();
 
-        return view('managers.portal.qr-management', compact('organization', 'qrCodes'));
+        return view('managers.portal.qr-management', compact('organization', 'qrCodes', 'filters'));
     }
 
     public function regenerateQr(Request $request, Driver $driver): RedirectResponse
@@ -208,16 +217,17 @@ class ManagerPortalController extends Controller
         $filters = $request->validate([
             'driver_id' => ['nullable', 'integer', Rule::exists('drivers', 'id')->where('organization_id', $organization->id)],
             'attendance_type' => ['nullable', 'in:ENTRY,EXIT'],
-            'start_date' => ['nullable', 'date'],
-            'end_date' => ['nullable', 'date', 'after_or_equal:start_date'],
+            'start_date' => ['nullable', 'date_format:Y-m-d'],
+            'end_date' => ['nullable', 'date_format:Y-m-d', 'after_or_equal:start_date'],
         ]);
+        $start = isset($filters['start_date']) ? PhilippineDay::bounds($filters['start_date'])[0] : null;
+        $end = isset($filters['end_date']) ? PhilippineDay::bounds($filters['end_date'])[1] : null;
         $records = DriverLog::query()
             ->whereHas('driver', fn ($query) => $query->where('organization_id', $organization->id))
             ->with('driver')
             ->when(isset($filters['driver_id']), fn ($query) => $query->where('driver_id', $filters['driver_id']))
             ->when(isset($filters['attendance_type']), fn ($query) => $query->where('attendance_type', $filters['attendance_type']))
-            ->when(isset($filters['start_date']), fn ($query) => $query->whereRaw('COALESCE(scanned_at, driver_logs.created_at) >= ?', [$filters['start_date'].' 00:00:00']))
-            ->when(isset($filters['end_date']), fn ($query) => $query->whereRaw('COALESCE(scanned_at, driver_logs.created_at) <= ?', [$filters['end_date'].' 23:59:59']))
+            ->recordedBetween($start, $end)
             ->latest('scanned_at')
             ->latest('id')
             ->paginate(25)

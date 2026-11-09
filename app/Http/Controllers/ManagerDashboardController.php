@@ -8,6 +8,7 @@ use App\Models\DriverLog;
 use App\Models\TodaOrganization;
 use App\Models\Vehicle;
 use App\Models\QrCode;
+use App\Services\PhilippineDay;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
@@ -26,13 +27,16 @@ class ManagerDashboardController extends Controller
             ->orderByDesc('event_date')
             ->orderByDesc('start_time')
             ->paginate(10);
+        [$start, $end, $date] = PhilippineDay::bounds();
+        $todayLogs = DriverLog::whereHas('driver', fn ($query) => $query->where('organization_id', $organization->id))
+            ->recordedBetween($start, $end);
         $stats = [
-            ['label' => 'Drivers', 'value' => Driver::where('organization_id', $organization->id)->count()],
-            ['label' => 'Active Drivers', 'value' => Driver::where('organization_id', $organization->id)->where('status', 'Active')->count()],
-            ['label' => 'Vehicles', 'value' => Vehicle::where('organization_id', $organization->id)->count()],
-            ['label' => 'Active QR Codes', 'value' => QrCode::where('status', 'Active')->whereHas('driver', fn ($query) => $query->where('organization_id', $organization->id))->count()],
-            ['label' => 'Entries Today', 'value' => DriverLog::where('attendance_type', 'ENTRY')->whereDate('scanned_at', today())->whereHas('driver', fn ($query) => $query->where('organization_id', $organization->id))->count()],
-            ['label' => 'Exits Today', 'value' => DriverLog::where('attendance_type', 'EXIT')->whereDate('scanned_at', today())->whereHas('driver', fn ($query) => $query->where('organization_id', $organization->id))->count()],
+            ['label' => 'Drivers', 'value' => Driver::where('organization_id', $organization->id)->count(), 'url' => route('manager.drivers')],
+            ['label' => 'Active Drivers', 'value' => Driver::where('organization_id', $organization->id)->where('status', 'Active')->count(), 'url' => route('manager.drivers', ['status' => 'Active'])],
+            ['label' => 'Vehicles', 'value' => Vehicle::where('organization_id', $organization->id)->count(), 'url' => route('manager.vehicles')],
+            ['label' => 'Active QR Codes', 'value' => QrCode::where('status', 'Active')->whereHas('driver', fn ($query) => $query->where('organization_id', $organization->id))->count(), 'url' => route('manager.qr.management', ['status' => 'Active'])],
+            ['label' => 'Entries Today', 'value' => (clone $todayLogs)->where('attendance_type', 'ENTRY')->count(), 'url' => route('manager.attendance', ['attendance_type' => 'ENTRY', 'start_date' => $date, 'end_date' => $date])],
+            ['label' => 'Exits Today', 'value' => (clone $todayLogs)->where('attendance_type', 'EXIT')->count(), 'url' => route('manager.attendance', ['attendance_type' => 'EXIT', 'start_date' => $date, 'end_date' => $date])],
         ];
 
         return view('managers.dashboard', compact('organization', 'events', 'stats'));

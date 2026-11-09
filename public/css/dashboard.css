@@ -500,6 +500,31 @@ body {
     box-shadow: none;
 }
 
+.manager-summary-link {
+    cursor: pointer;
+    transition: transform 150ms ease, background-color 150ms ease;
+}
+
+.manager-summary-link:hover {
+    transform: translateY(-2px);
+    background-color: #f8faff;
+}
+
+.manager-summary-link:focus-visible {
+    outline: 3px solid var(--dashboard-blue, #1138d4);
+    outline-offset: 4px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .manager-summary-link {
+        transition: none;
+    }
+
+    .manager-summary-link:hover {
+        transform: none;
+    }
+}
+
 .dashboard-card,
 .stat-card {
     border-radius: var(--dashboard-radius);

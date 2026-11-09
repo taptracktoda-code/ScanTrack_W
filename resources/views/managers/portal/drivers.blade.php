@@ -41,9 +41,11 @@
 
     <section class="card dashboard-card border-0 shadow-sm">
         <div class="card-body p-0">
-            <form method="GET" action="{{ route('manager.drivers') }}" class="p-3 border-bottom d-flex gap-2">
-                <input class="form-control" type="search" name="search" value="{{ request('search') }}" placeholder="Search by name, license, or plate">
-                <button class="btn btn-outline-primary" type="submit">Search</button>
+            <form method="GET" action="{{ route('manager.drivers') }}" class="p-3 border-bottom d-flex flex-wrap gap-2 align-items-end">
+                <div class="flex-grow-1"><label class="form-label" for="driver-search">Search drivers</label><input id="driver-search" class="form-control" type="search" name="search" maxlength="200" value="{{ $filters['search'] ?? '' }}" placeholder="Search by name, license, or plate"></div>
+                <div><label class="form-label" for="driver-status">Status</label><select id="driver-status" class="form-select" name="status"><option value="">All statuses</option>@foreach (['Active', 'Inactive', 'Pending', 'Rejected'] as $status)<option value="{{ $status }}" @selected(($filters['status'] ?? '') === $status)>{{ $status }}</option>@endforeach</select></div>
+                <button class="btn btn-outline-primary" type="submit">Filter</button>
+                <a class="btn btn-outline-secondary" href="{{ route('manager.drivers') }}">Clear</a>
             </form>
             <div class="table-responsive">
                 <table class="table table-hover align-middle mb-0">
@@ -66,7 +68,7 @@
                                 </td>
                             </tr>
                         @empty
-                            <tr><td colspan="6" class="text-center text-muted py-4">No drivers are assigned to this organization yet.</td></tr>
+                            <tr><td colspan="6" class="text-center text-muted py-4">{{ request()->filled('search') || request()->filled('status') ? 'No drivers match these filters.' : 'No drivers are assigned to this organization yet.' }}</td></tr>
                         @endforelse
                     </tbody>
                 </table>

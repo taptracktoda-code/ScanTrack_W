@@ -12,12 +12,12 @@
     <div class="row g-3 mb-4">
         @foreach ($stats as $stat)
             <div class="col-6 col-xl-3">
-                <div class="card dashboard-card border-0 shadow-sm h-100">
+                <a href="{{ $stat['url'] }}" class="card dashboard-card manager-summary-link border-0 shadow-sm h-100 text-decoration-none text-reset" aria-label="{{ $stat['label'] }}: {{ number_format($stat['value']) }}. View records.">
                     <div class="card-body">
                         <div class="text-muted small">{{ $stat['label'] }}</div>
                         <div class="fs-3 fw-bold">{{ number_format($stat['value']) }}</div>
                     </div>
-                </div>
+                </a>
             </div>
         @endforeach
     </div>
