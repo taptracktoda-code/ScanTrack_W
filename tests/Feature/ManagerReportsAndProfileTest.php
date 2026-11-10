@@ -17,6 +17,25 @@ class ManagerReportsAndProfileTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_report_photos_are_previewed_inline_and_signed_links_still_expire(): void
+    {
+        Storage::fake('local');
+        [$manager, , $account] = $this->fixture('Photo');
+        $response = $this->actingAs($account, 'sanctum')->postJson('/api/driver/issues', [
+            'type' => 'other', 'explanation' => 'Broken light', 'client_request_id' => 'photo-preview',
+            'attachments' => [UploadedFile::fake()->image('evidence.jpg')],
+        ])->assertCreated();
+        $url = $response->json('data.attachments.0.url');
+        $id = $response->json('data.id');
+        $this->get($url)->assertOk()->assertHeader('Content-Type', 'image/jpeg')
+            ->assertHeader('Content-Disposition', 'inline; filename=evidence.jpg');
+        $this->actingAs($manager, 'web')->get('/manager/reports/'.$id)->assertOk()
+            ->assertSee('alt="Report photo: evidence.jpg"', false)->assertDontSee('Download evidence.jpg');
+        $this->get(route('reports.attachments.show', [$id, 0]))->assertForbidden();
+        $this->travel(16)->minutes();
+        $this->get($url)->assertForbidden();
+    }
+
     public function test_mobile_report_with_attachment_is_received_reviewed_on_web_and_synced_to_driver(): void
     {
         Storage::fake('local');

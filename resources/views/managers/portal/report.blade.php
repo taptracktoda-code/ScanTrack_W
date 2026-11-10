@@ -17,9 +17,18 @@
             <dt class="col-sm-3">Original queue entry</dt><dd class="col-sm-9">{{ $issue->queue_entry_id ? '#'.$issue->queue_entry_id.' — '.($issue->queueEntry?->status ?? 'Unavailable') : 'General report' }}</dd>
             <dt class="col-sm-3">Attachments</dt><dd class="col-sm-9">
                 @forelse ($issue->attachmentData() as $file)
-                    <a class="d-block mb-2" href="{{ $file['url'] }}">Download {{ $file['name'] }} ({{ number_format($file['size'] / 1024) }} KB)</a>
+                    @if (preg_match('/\.(jpe?g|png|webp)$/i', $file['name']))
+                        <figure class="mb-3">
+                            <a href="{{ $file['url'] }}" target="_blank" rel="noopener noreferrer" aria-label="View full-size photo: {{ $file['name'] }}">
+                                <img src="{{ $file['url'] }}" alt="Report photo: {{ $file['name'] }}" class="img-fluid rounded border" style="max-height: 480px; object-fit: contain" loading="lazy" referrerpolicy="no-referrer">
+                            </a>
+                            <figcaption class="text-muted mt-1">{{ $file['name'] }} ({{ number_format($file['size'] / 1024) }} KB) &middot; Select photo to view full size</figcaption>
+                        </figure>
+                    @else
+                        <a class="d-block mb-2" href="{{ $file['url'] }}">Download {{ $file['name'] }} ({{ number_format($file['size'] / 1024) }} KB)</a>
+                    @endif
                 @empty No attachments. @endforelse
-                @if ($issue->attachments)<small class="text-muted">Download links expire after 15 minutes. Refresh this page to renew them.</small>@endif
+                @if ($issue->attachments)<small class="text-muted">Attachment links expire after 15 minutes. If a photo does not load, refresh this page to try again.</small>@endif
             </dd>
             @if ($issue->decided_at)
                 <dt class="col-sm-3">Reviewed by</dt><dd class="col-sm-9">{{ $issue->reviewer?->name ?? 'Manager' }} · {{ $issue->decided_at->timezone('Asia/Manila')->format('F j, Y g:i A') }}</dd>

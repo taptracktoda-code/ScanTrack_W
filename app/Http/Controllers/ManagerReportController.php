@@ -32,15 +32,18 @@ class ManagerReportController extends Controller
         return redirect()->route('manager.reports.show', $issue)->with('status', 'Report reviewed successfully. The driver can now see your decision.');
     }
 
-    // Short-lived signed links allow mobile browsers to download private files without exposing API tokens.
+    // Short-lived signed links allow private previews without exposing API tokens.
     public function attachment(DriverIssueRequest $issue, string $attachment)
     {
         abort_unless(ctype_digit($attachment), 404);
         $file = ($issue->attachments ?? [])[(int) $attachment] ?? null;
         abort_unless($file && Storage::disk('local')->exists($file['path']), 404);
 
-        return Storage::disk('local')->download($file['path'], $file['name'], [
+        $mime = Storage::disk('local')->mimeType($file['path']);
+        $image = in_array($mime, ['image/jpeg', 'image/png', 'image/webp'], true);
+
+        return Storage::disk('local')->response($file['path'], $file['name'], [
             'Cache-Control' => 'private, no-store', 'X-Content-Type-Options' => 'nosniff',
-        ]);
+        ], $image ? 'inline' : 'attachment');
     }
 }
