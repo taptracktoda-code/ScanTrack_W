@@ -9,6 +9,7 @@ use App\Models\User;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
@@ -118,6 +119,25 @@ class ManagerController extends Controller
                 'organization' => $manager->organization?->name,
             ],
         ]);
+    }
+
+    public function destroy(User $manager): RedirectResponse
+    {
+        $this->ensureManager($manager);
+
+        DB::transaction(function () use ($manager): void {
+            $manager->tokens()->delete();
+            $manager->expoPushTokens()->delete();
+            $manager->delete();
+
+            TerminalActivity::create([
+                'admin_id' => auth()->id(),
+                'activity' => 'Manager account deleted',
+                'description' => $manager->name . ' (manager ID: ' . $manager->id . ') removed from ' . ($manager->organization?->name ?? 'no organization'),
+            ]);
+        });
+
+        return redirect()->route('managers')->with('status', 'Manager account deleted.');
     }
 
     public function toggleStatus(User $manager): RedirectResponse

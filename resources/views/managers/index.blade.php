@@ -86,6 +86,11 @@
                                         <button form="manager-{{ $manager->id }}-update" class="btn btn-sm btn-outline-primary" title="Save manager details" aria-label="Save manager details"><i class="bi bi-check-lg"></i></button>
                                         <form method="POST" action="{{ route('managers.status', $manager) }}">@csrf<button class="btn btn-sm btn-outline-secondary" title="Toggle account status" aria-label="Toggle account status"><i class="bi bi-toggle-on"></i></button></form>
                                         <form method="POST" action="{{ route('managers.password.reset', $manager) }}">@csrf<button class="btn btn-sm btn-outline-warning" title="Reset password and email new credentials" aria-label="Reset manager password"><i class="bi bi-key"></i></button></form>
+                                        <form method="POST" action="{{ route('managers.destroy', $manager) }}" data-swal-delete data-swal-name="{{ $manager->name }}">
+                                            @csrf
+                                            @method('DELETE')
+                                            <button type="submit" class="btn btn-sm btn-outline-danger" title="Delete manager" aria-label="Delete manager {{ $manager->name }}"><i class="bi bi-trash"></i></button>
+                                        </form>
                                     </div>
                                 </td>
                             </tr>

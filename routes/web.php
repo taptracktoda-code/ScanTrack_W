@@ -72,6 +72,7 @@ Route::middleware(['auth', 'admin'])->group(function () {
         Route::get('/queues', [QueueMonitoringController::class, 'index'])->name('queues.monitoring');
         Route::post('/managers', [ManagerController::class, 'store'])->name('managers.store');
         Route::put('/managers/{manager}', [ManagerController::class, 'update'])->name('managers.update');
+        Route::delete('/managers/{manager}', [ManagerController::class, 'destroy'])->name('managers.destroy');
         Route::post('/managers/{manager}/status', [ManagerController::class, 'toggleStatus'])->name('managers.status');
         Route::post('/managers/{manager}/password/reset', [ManagerController::class, 'resetPassword'])->name('managers.password.reset');
         Route::get('/drivers', [DriverController::class, 'index'])->name('drivers');
