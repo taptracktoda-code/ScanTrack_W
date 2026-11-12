@@ -98,16 +98,6 @@
                                         class="btn driver-icon-btn"
                                         type="button"
                                         data-bs-toggle="modal"
-                                        data-bs-target="#driverSmsModal-{{ $driver->id }}"
-                                        aria-label="Send SMS to {{ $displayName }}"
-                                        title="Send SMS"
-                                    >
-                                        <i class="bi bi-chat-dots-fill"></i>
-                                    </button>
-                                    <button
-                                        class="btn driver-icon-btn"
-                                        type="button"
-                                        data-bs-toggle="modal"
                                         data-bs-target="#driverEditModal-{{ $driver->id }}"
                                         aria-label="Edit {{ $displayName }}"
                                     >
@@ -161,11 +151,6 @@
             'title' => 'Edit Driver',
             'action' => route('drivers.update', $driver),
             'method' => 'PUT',
-            'driver' => $driver,
-        ])
-
-        @include('drivers.partials.sms-modal', [
-            'modalId' => 'driverSmsModal-' . $driver->id,
             'driver' => $driver,
         ])
 
