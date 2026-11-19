@@ -30,16 +30,26 @@ class OperationsReportPdf
             'isJavascriptEnabled' => false,
         ]);
         $pdf->loadHtml(view('reports.operations-pdf', [
-            'title' => OperationsReport::TYPES[$type],
+            'title' => $type === 'combined'
+                ? 'Driver Entry, Exit and Queue Monitoring Report'
+                : OperationsReport::TYPES[$type],
             'period' => $this->period($filters),
-            'generatedAt' => OperationsReport::timestamp(now()),
+            'generatedAt' => $this->dateTime(now()),
             'sections' => $sections,
         ])->render(), 'UTF-8');
         $pdf->setPaper('A4', 'landscape');
         $pdf->render();
         $canvas = $pdf->getCanvas();
-        $font = $pdf->getFontMetrics()->getFont('DejaVu Sans');
-        $canvas->page_text($canvas->get_width() - 119, $canvas->get_height() - 24, 'Page {PAGE_NUM} of {PAGE_COUNT}', $font, 8, [0.24, 0.31, 0.40]);
+        $canvas->page_script(function ($page, $pages, $canvas, $fonts): void {
+            $font = $fonts->getFont('DejaVu Sans');
+            $label = "Page {$page} of {$pages}";
+            $right = $canvas->get_width() - 34;
+            $bottom = $canvas->get_height();
+            $ink = [0.30, 0.34, 0.39];
+            $canvas->line(34, $bottom - 29, $right, $bottom - 29, [0.83, 0.86, 0.89], 0.5);
+            $canvas->text(34, $bottom - 22, 'SCANTRACK  /  SCFTODA', $font, 8, $ink);
+            $canvas->text($right - $fonts->getTextWidth($label, $font, 8), $bottom - 22, $label, $font, 8, $ink);
+        });
 
         return $pdf->output();
     }
@@ -61,8 +71,8 @@ class OperationsReportPdf
             'headers' => ['Driver and ID' => 20, 'TODA' => 15, 'Terminals' => 23, 'Entry date and time' => 21, 'Exit date and time' => 21],
             'rows' => $visits->map(fn ($row) => [
                 ...$this->identity($row),
-                OperationsReport::timestamp(OperationsReport::scanTime($row['entry'])),
-                OperationsReport::timestamp(OperationsReport::scanTime($row['exit'])),
+                $this->dateTime(OperationsReport::scanTime($row['entry'])),
+                $this->dateTime(OperationsReport::scanTime($row['exit'])),
             ]),
         ];
     }
@@ -72,21 +82,28 @@ class OperationsReportPdf
         return [
             'title' => 'Queue sessions',
             'headers' => [
-                'Driver and ID' => 12, 'TODA' => 8, 'Terminals' => 13, 'Entry / Exit date and time' => 14,
-                'Queue no. / Current position' => 9, 'Joined' => 10, 'Queue status' => 8,
-                'Total waiting' => 7, 'Trip start / completion' => 12, 'Driver trips completed (all time)' => 7,
+                'Driver / TODA' => 17, 'Terminals' => 18, 'Attendance' => 16, 'Queue session' => 17,
+                'Waiting time' => 8, 'Trip' => 16, 'Trips completed (all time)' => 8,
             ],
             'rows' => $sessions->map(fn ($row) => [
-                ...$this->identity($row),
-                'In: '.OperationsReport::timestamp(OperationsReport::scanTime($row['entry']))
-                    ."\nOut: ".OperationsReport::timestamp(OperationsReport::scanTime($row['exit'])),
-                '#'.$row['queue']->queue_number."\n".($row['position'] ?? OperationsReport::UNKNOWN),
-                OperationsReport::timestamp($row['queue']->created_at),
-                (OperationsReport::STATUSES[$row['queue']->status] ?? OperationsReport::UNKNOWN)
-                    .($row['queue']->removed_at ? "\nManual removal" : ''),
+                [$row['driver'], 'ID' => $row['driver_id'], $row['organization']],
+                $this->terminals($row),
+                [
+                    'Entry' => $this->dateTime(OperationsReport::scanTime($row['entry'])),
+                    'Exit' => $this->dateTime(OperationsReport::scanTime($row['exit'])),
+                ],
+                array_filter([
+                    OperationsReport::STATUSES[$row['queue']->status] ?? OperationsReport::UNKNOWN,
+                    $row['queue']->removed_at ? 'Manual removal' : null,
+                    'No.' => $row['queue']->queue_number,
+                    'Position' => $row['position'] ?? OperationsReport::UNKNOWN,
+                    'Joined' => $this->dateTime($row['queue']->created_at),
+                ], fn ($value) => $value !== null),
                 OperationsReport::duration($row['waiting']),
-                $row['trip'] ? OperationsReport::timestamp($row['trip']->departure_time)
-                    ."\n".OperationsReport::timestamp($row['trip']->arrival_time) : 'No Trip Recorded',
+                $row['trip'] ? [
+                    'Start' => $this->dateTime($row['trip']->departure_time),
+                    'End' => $this->dateTime($row['trip']->arrival_time),
+                ] : 'No Trip Recorded',
                 $row['total_trips'],
             ]),
         ];
@@ -98,13 +115,13 @@ class OperationsReportPdf
             'title' => 'Recorded trips',
             'headers' => [
                 'Driver and ID' => 14, 'TODA' => 10, 'Terminals' => 16, 'Trip ID and destination' => 18,
-                'Departure' => 14, 'Completion' => 14, 'Trip status' => 7, 'Driver trips completed (all time)' => 7,
+                'Departure' => 14, 'Completion' => 14, 'Trip status' => 7, 'Trips completed (all time)' => 7,
             ],
             'rows' => $trips->map(fn ($row) => [
                 ...$this->identity($row),
-                $row['trip']->trip_id."\n".$row['trip']->destination,
-                OperationsReport::timestamp($row['trip']->departure_time),
-                OperationsReport::timestamp($row['trip']->arrival_time),
+                [$row['trip']->destination, $row['trip']->trip_id],
+                $this->dateTime($row['trip']->departure_time),
+                $this->dateTime($row['trip']->arrival_time),
                 ucfirst(str_replace('_', ' ', $row['trip']->status)),
                 $row['total_trips'],
             ]),
@@ -121,7 +138,7 @@ class OperationsReportPdf
             }
             $date = $time->copy()->timezone(OperationsReport::ZONE)->toDateString();
             if ($date >= ($filters['start_date'] ?? '') && $date <= ($filters['end_date'] ?? '9999-12-31')) {
-                $events->push([$time, [...$this->identity($row), OperationsReport::timestamp($time), $event]]);
+                $events->push([$time, [...$this->identity($row), $this->dateTime($time), $event]]);
             }
         };
 
@@ -161,7 +178,7 @@ class OperationsReportPdf
             'title' => 'Current driver terminal assignments',
             'headers' => ['Driver and ID' => 34, 'Current TODA' => 33, 'Assigned terminal' => 33],
             'rows' => $drivers->map(fn ($row) => [
-                $row['driver']."\nID ".$row['driver_id'],
+                [$row['driver'], 'ID' => $row['driver_id']],
                 $row['organization'],
                 $row['assigned_terminal'] ?? 'Unassigned',
             ]),
@@ -172,10 +189,22 @@ class OperationsReportPdf
     private function identity(array $row): array
     {
         return [
-            $row['driver']."\nID ".$row['driver_id'],
+            [$row['driver'], 'ID' => $row['driver_id']],
             $row['organization'],
-            'Assigned: '.($row['assigned_terminal'] ?? 'Unassigned')
-                ."\nRecorded: ".($row['terminal'] ?? OperationsReport::UNKNOWN),
+            $this->terminals($row),
         ];
+    }
+
+    private function terminals(array $row): array
+    {
+        return [
+            'Assigned' => $row['assigned_terminal'] ?? 'Unassigned',
+            'Recorded' => $row['terminal'] ?? OperationsReport::UNKNOWN,
+        ];
+    }
+
+    private function dateTime(?CarbonInterface $time): string
+    {
+        return $time?->copy()->timezone(OperationsReport::ZONE)->format('d M Y, H:i:s') ?? OperationsReport::UNKNOWN;
     }
 }

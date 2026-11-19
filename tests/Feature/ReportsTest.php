@@ -90,4 +90,21 @@ class ReportsTest extends TestCase
             $this->actingAs($manager)->get(route($route))->assertForbidden();
         }
     }
+
+    public function test_combined_pdf_paginates_many_drivers_with_long_terminal_names(): void
+    {
+        $admin = User::factory()->create(['role' => 'SUPER_ADMIN']);
+        foreach (range(1, 24) as $number) {
+            Driver::create([
+                'name' => 'Maria Josefina Dela Cruz Santos '.$number,
+                'license_number' => 'PDF-LAYOUT-'.$number,
+                'status' => 'Active',
+                'assigned_terminal' => str_repeat('TerminalIdentifier', 9),
+            ]);
+        }
+
+        $pdf = $this->actingAs($admin)->get(route('reports.export', ['type' => 'combined']))
+            ->assertOk()->assertDownload()->getContent();
+        $this->assertGreaterThan(1, preg_match_all('/\/Type\s*\/Page\b/', $pdf));
+    }
 }

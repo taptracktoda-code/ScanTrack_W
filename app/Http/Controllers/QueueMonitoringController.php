@@ -15,14 +15,24 @@ class QueueMonitoringController extends Controller
 {
     public function index(Request $request, OperationsReport $reports): View
     {
-        $filters = $reports->filters($request);
+        $managerOrganization = $request->user()->isManager() ? $request->user()->organization : null;
+        $organizationId = $this->managedOrganizationId($request);
+        $routePrefix = $organizationId === null ? '' : 'manager.';
+        $filters = $reports->filters($request, $organizationId);
 
-        return view('queues.index', $this->monitor($request, $reports, $filters) + [
+        return view('queues.index', $this->monitor($request, $reports, $filters, $organizationId) + [
             'filters' => $filters,
+            'managerOrganization' => $managerOrganization,
+            'indexRoute' => $routePrefix.'queues.monitoring',
+            'feedRoute' => $routePrefix.'queues.feed',
+            'reportsRoute' => $routePrefix.'reports',
             'terminals' => DriverLog::query()->whereNotNull('terminal_id')->where('terminal_id', '<>', '')
+                ->when($organizationId !== null, fn ($query) => $query->where('organization_id', $organizationId))
                 ->distinct()->orderBy('terminal_id')->pluck('terminal_id'),
-            'organizations' => TodaOrganization::orderBy('name')->get(['id', 'name']),
-            'drivers' => Driver::orderBy('name')->get(['id', 'name']),
+            'organizations' => $organizationId === null ? TodaOrganization::orderBy('name')->get(['id', 'name']) : collect(),
+            'drivers' => Driver::orderBy('name')
+                ->when($organizationId !== null, fn ($query) => $query->where('organization_id', $organizationId))
+                ->get(['id', 'name']),
             'reportTypes' => OperationsReport::TYPES,
             'statuses' => OperationsReport::STATUSES,
         ]);
@@ -30,8 +40,9 @@ class QueueMonitoringController extends Controller
 
     public function feed(Request $request, OperationsReport $reports): Response
     {
-        $filters = $reports->filters($request);
-        $response = response()->view('queues.records', $this->monitor($request, $reports, $filters))
+        $organizationId = $this->managedOrganizationId($request);
+        $filters = $reports->filters($request, $organizationId);
+        $response = response()->view('queues.records', $this->monitor($request, $reports, $filters, $organizationId))
             ->header('Cache-Control', 'private, no-cache');
         $response->setEtag(hash('sha256', $response->getContent()));
         $response->isNotModified($request);
@@ -39,17 +50,22 @@ class QueueMonitoringController extends Controller
         return $response;
     }
 
-    private function monitor(Request $request, OperationsReport $reports, array $filters): array
+    private function managedOrganizationId(Request $request): ?int
     {
-        $snapshot = $reports->snapshot($filters);
+        return $request->user()->isManager() ? (int) $request->user()->organization_id : null;
+    }
+
+    private function monitor(Request $request, OperationsReport $reports, array $filters, ?int $organizationId): array
+    {
+        $snapshot = $reports->snapshot($filters, managedOrganizationId: $organizationId);
         $pageSize = 25;
         $total = $snapshot['records']->count();
         $page = min(max(1, (int) $request->query('page', 1)), max(1, (int) ceil($total / $pageSize)));
         $records = new LengthAwarePaginator($snapshot['records']->forPage($page, $pageSize), $total, $pageSize, $page, [
-            'path' => route('queues.monitoring'),
+            'path' => route($organizationId === null ? 'queues.monitoring' : 'manager.queues.monitoring'),
             'query' => $filters,
         ]);
 
-        return ['summary' => $snapshot['summary'], 'records' => $records];
+        return ['summary' => $snapshot['summary'], 'records' => $records, 'isManagerQueue' => $organizationId !== null];
     }
 }

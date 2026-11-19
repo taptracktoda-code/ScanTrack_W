@@ -8,6 +8,7 @@ use App\Models\OrganizationQueueEntry;
 use App\Models\TodaOrganization;
 use App\Models\Trip;
 use Carbon\CarbonInterface;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -34,19 +35,23 @@ class OperationsReport
 
     public const UNKNOWN = 'Not Available';
 
-    public function filters(Request $request): array
+    public function filters(Request $request, ?int $managedOrganizationId = null): array
     {
+        $driverRule = Rule::exists('drivers', 'id')->where(
+            fn ($query) => $query->when($managedOrganizationId !== null, fn ($query) => $query->where('organization_id', $managedOrganizationId))
+        );
+
         return array_filter($request->validate([
             'terminal' => ['nullable', 'string', 'max:255'],
-            'organization_id' => ['nullable', 'integer', 'exists:toda_organizations,id'],
-            'driver_id' => ['nullable', 'integer', 'exists:drivers,id'],
+            'organization_id' => $managedOrganizationId === null ? ['nullable', 'integer', 'exists:toda_organizations,id'] : ['prohibited'],
+            'driver_id' => ['nullable', 'integer', $driverRule],
             'start_date' => ['nullable', 'date_format:Y-m-d'],
             'end_date' => ['nullable', 'date_format:Y-m-d', Rule::when($request->filled('start_date'), 'after_or_equal:start_date')],
             'status' => ['nullable', Rule::in(array_keys(self::STATUSES))],
         ]), fn ($value) => $value !== null);
     }
 
-    public function snapshot(array $filters, bool $includeAssignments = false): array
+    public function snapshot(array $filters, bool $includeAssignments = false, ?int $managedOrganizationId = null): array
     {
         $connection = DB::connection();
         $outermost = $connection->transactionLevel() === 0;
@@ -55,25 +60,33 @@ class OperationsReport
             $connection->statement('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ');
         }
 
-        [$logs, $entries, $waiting, $trips, $drivers, $organizations] = $connection->transaction(function () use ($connection, $outermost, $driver, $filters) {
+        [$logs, $entries, $waiting, $trips, $drivers, $organizations] = $connection->transaction(function () use ($connection, $outermost, $driver, $filters, $managedOrganizationId) {
             if ($outermost && $driver === 'pgsql') {
                 $connection->statement('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY');
             }
             $driverId = $filters['driver_id'] ?? null;
 
-            return [
-                DriverLog::when($driverId, fn ($query) => $query->where('driver_id', $driverId))
-                    ->whereIn('attendance_type', ['ENTRY', 'EXIT'])
-                    ->orderByRaw('COALESCE(scanned_at, created_at)')->orderBy('id')->get(),
-                OrganizationQueueEntry::when($driverId, fn ($query) => $query->where('driver_id', $driverId))->get(),
-                OrganizationQueueEntry::where('status', 'WAITING')->orderBy('queue_number')->orderBy('id')
-                    ->get(['id', 'driver_id', 'organization_id', 'status'])->groupBy('organization_id'),
-                Trip::with('destinationRecord:id,organization_id')
-                    ->when($driverId, fn ($query) => $query->where('driver_id', $driverId))->get(),
-                Driver::when($driverId, fn ($query) => $query->whereKey($driverId))
-                    ->orderBy('name')->orderBy('id')->get(['id', 'name', 'organization_id', 'assigned_terminal'])->keyBy('id'),
-                TodaOrganization::pluck('name', 'id'),
-            ];
+            $logs = DriverLog::when($driverId, fn ($query) => $query->where('driver_id', $driverId))
+                ->when($managedOrganizationId !== null, fn ($query) => $query->where('organization_id', $managedOrganizationId))
+                ->whereIn('attendance_type', ['ENTRY', 'EXIT'])
+                ->orderByRaw('COALESCE(scanned_at, created_at)')->orderBy('id')->get();
+            $queue = OrganizationQueueEntry::when($managedOrganizationId !== null, fn ($query) => $query->where('organization_id', $managedOrganizationId));
+            $entries = (clone $queue)->when($driverId, fn ($query) => $query->where('driver_id', $driverId))->get();
+            $waiting = $queue->where('status', 'WAITING')->orderBy('queue_number')->orderBy('id')
+                ->get(['id', 'driver_id', 'organization_id', 'status'])->groupBy('organization_id');
+            $trips = Trip::with('destinationRecord:id,organization_id')
+                ->when($driverId, fn ($query) => $query->where('driver_id', $driverId))
+                ->when($managedOrganizationId !== null, fn ($query) => $this->limitTripsToOrganization($query, $managedOrganizationId))
+                ->get();
+            $drivers = Driver::when($driverId, fn ($query) => $query->whereKey($driverId))
+                ->when($managedOrganizationId !== null, fn ($query) => $query->whereIntegerInRaw('id',
+                    $logs->pluck('driver_id')->merge($entries->pluck('driver_id'))->merge($trips->pluck('driver_id'))->unique()->all()
+                ))
+                ->orderBy('name')->orderBy('id')->get(['id', 'name', 'organization_id', 'assigned_terminal'])->keyBy('id');
+            $organizations = TodaOrganization::when($managedOrganizationId !== null, fn ($query) => $query->whereKey($managedOrganizationId))
+                ->pluck('name', 'id');
+
+            return [$logs, $entries, $waiting, $trips, $drivers, $organizations];
         });
 
         $now = now()->toImmutable();
@@ -119,11 +132,13 @@ class OperationsReport
             'organization_id' => $organizationId,
             'organization' => $organizations[$organizationId] ?? self::UNKNOWN,
             'terminal' => $terminal,
-            'assigned_terminal' => $drivers->get($driverId)?->assigned_terminal,
+            'assigned_terminal' => $managedOrganizationId === null || (int) $drivers->get($driverId)?->organization_id === $managedOrganizationId
+                ? $drivers->get($driverId)?->assigned_terminal : null,
             'total_trips' => $completedByDriver[$driverId] ?? 0,
         ];
 
         $scopeIncludes = fn ($row) => (! isset($filters['driver_id']) || $row['driver_id'] == $filters['driver_id'])
+            && ($managedOrganizationId === null || (int) $row['organization_id'] === $managedOrganizationId)
             && (! isset($filters['organization_id']) || $row['organization_id'] == $filters['organization_id'])
             && (! isset($filters['terminal']) || $row['terminal'] === $filters['terminal']);
         $statusIncludes = fn ($queue) => ! isset($filters['status']) || $queue?->status === $filters['status'];
@@ -175,7 +190,8 @@ class OperationsReport
             if (! $displayedVisits->has($log->id)) {
                 $standaloneRows->push($row);
             }
-            if ($entry && $latestScans[$log->driver_id]->id === $entry->id && ! $out->has($log->driver_id)) {
+            if ($entry && $latestScans[$log->driver_id]->id === $entry->id && ! $out->has($log->driver_id)
+                && ($managedOrganizationId === null || (int) $drivers->get($log->driver_id)?->organization_id === $managedOrganizationId)) {
                 $inside->push($log->driver_id);
             }
         }
@@ -224,6 +240,19 @@ class OperationsReport
             'records' => $this->latestFirst($queueRows->concat($standaloneRows)),
             'assignments' => $assignments,
         ];
+    }
+
+    private function limitTripsToOrganization(Builder $query, int $organizationId): Builder
+    {
+        $destinationInOrganization = fn ($destination) => $destination->where('organization_id', $organizationId);
+
+        return $query->where(function ($query) use ($organizationId, $destinationInOrganization) {
+            $query->where('organization_id', $organizationId)
+                ->orWhere(fn ($query) => $query->whereNull('organization_id')->whereHas('destinationRecord', $destinationInOrganization));
+        })->whereDoesntHave('destinationRecord', fn ($query) => $query->where('organization_id', '<>', $organizationId))
+            ->where(fn ($query) => $query->whereNull('queue_entry_id')->orWhereIn('queue_entry_id',
+                OrganizationQueueEntry::where('organization_id', $organizationId)->select('id')
+            ));
     }
 
     private function queueEntryLinks(Collection $entries, Collection $logs): Collection

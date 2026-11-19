@@ -6,6 +6,7 @@
             ['label' => 'Vehicles', 'icon' => 'bi-truck', 'route' => 'manager.vehicles'],
             ['label' => 'QR Management', 'icon' => 'bi-qr-code-scan', 'route' => 'manager.qr.management'],
             ['label' => 'Attendance', 'icon' => 'bi-calendar-check', 'route' => 'manager.attendance'],
+            ['label' => 'Queue Monitoring', 'icon' => 'bi-list-ol', 'route' => 'manager.queues.monitoring'],
             ['label' => 'Reports', 'icon' => 'bi-file-earmark-text', 'route' => 'manager.reports'],
             ['label' => 'Organization', 'icon' => 'bi-buildings', 'route' => 'manager.organization'],
         ]

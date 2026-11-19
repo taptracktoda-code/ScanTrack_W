@@ -44,6 +44,8 @@ Route::middleware(['auth', 'manager'])->prefix('manager')->name('manager.')->gro
         Route::post('/drivers/{driver}/qr/regenerate', [ManagerPortalController::class, 'regenerateQr'])->name('drivers.qr.regenerate');
         Route::post('/drivers/{driver}/qr/{status}', [ManagerPortalController::class, 'setQrStatus'])->whereIn('status', ['activate', 'deactivate'])->name('drivers.qr.status');
         Route::get('/attendance', [ManagerPortalController::class, 'attendance'])->name('attendance');
+        Route::get('/queues', [QueueMonitoringController::class, 'index'])->name('queues.monitoring');
+        Route::get('/queues/feed', [QueueMonitoringController::class, 'feed'])->name('queues.feed');
         Route::get('/reports', [ManagerPortalController::class, 'reports'])->name('reports');
         Route::get('/reports/export', [ManagerPortalController::class, 'exportReports'])->name('reports.export');
         Route::get('/reports/{issue}', [ManagerReportController::class, 'show'])->name('reports.show');

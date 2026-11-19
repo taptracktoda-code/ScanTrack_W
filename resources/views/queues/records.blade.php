@@ -1,5 +1,6 @@
 @php
     use App\Services\OperationsReport;
+    $tripCountLabel = $isManagerQueue ? 'TODA trips completed (all time)' : 'Trips completed (all time)';
 @endphp
 
 <section class="queue-metrics" aria-label="Queue and terminal totals">
@@ -32,7 +33,7 @@
                     <th scope="col" role="columnheader">Status</th>
                     <th scope="col" role="columnheader">Waiting time</th>
                     <th scope="col" role="columnheader">Trip start / Completion</th>
-                    <th scope="col" role="columnheader">Trips completed (all time)</th>
+                    <th scope="col" role="columnheader">{{ $tripCountLabel }}</th>
                 </tr>
             </thead>
             <tbody role="rowgroup">
@@ -86,7 +87,7 @@
                             @endif
                         </td>
                         <td role="cell">
-                            <span class="queue-cell-label" aria-hidden="true">Trips completed (all time)</span>
+                            <span class="queue-cell-label" aria-hidden="true">{{ $tripCountLabel }}</span>
                             {{ $row['total_trips'] }}
                         </td>
                     </tr>

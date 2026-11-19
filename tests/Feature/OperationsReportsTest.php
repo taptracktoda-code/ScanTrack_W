@@ -8,6 +8,7 @@ use App\Models\OrganizationDestination;
 use App\Models\OrganizationQueueEntry;
 use App\Models\QrCode;
 use App\Models\TodaOrganization;
+use App\Models\Trip;
 use App\Models\User;
 use App\Services\OperationsReport;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -100,8 +101,8 @@ class OperationsReportsTest extends TestCase
             $entry = OrganizationQueueEntry::where('driver_id', $driver->id)->sole();
             $entry->update(['status' => 'SERVING', 'served_at' => now()]);
             $row = $view->getData()['sections'][0]['rows']->sole();
-            $this->assertContains('Waiting', $row);
-            $this->assertContains("Assigned: Unassigned\nRecorded: Snapshot Terminal", $row);
+            $this->assertSame('Waiting', $row[3][0]);
+            $this->assertSame(['Assigned' => 'Unassigned', 'Recorded' => 'Snapshot Terminal'], $row[1]);
             $rendered = true;
         });
 
@@ -154,7 +155,10 @@ class OperationsReportsTest extends TestCase
 
         View::composer('reports.operations-pdf', function ($view) use ($driver, $noScans): void {
             $sections = collect($view->getData()['sections'])->keyBy('title');
-            $this->assertContains("Assigned: Harbor Terminal\nRecorded: Market Terminal", $sections['Queue sessions']['rows']->sole());
+            $this->assertSame(
+                ['Assigned' => 'Harbor Terminal', 'Recorded' => 'Market Terminal'],
+                $sections['Queue sessions']['rows']->sole()[1],
+            );
             $assignments = $sections['Current driver terminal assignments']['rows'];
             $this->assertSame('Harbor Terminal', $assignments[$driver->id][2]);
             $this->assertSame('Unassigned', $assignments[$noScans->id][2]);
@@ -168,6 +172,64 @@ class OperationsReportsTest extends TestCase
             'assigned_terminal' => '',
         ])->assertRedirect(route('drivers'));
         $this->assertNull($driver->refresh()->assigned_terminal);
+    }
+
+    public function test_manager_web_queue_and_live_feed_are_scoped_to_the_assigned_toda(): void
+    {
+        $this->freezeTime();
+        [$north, $manager, $driver, , $qr] = $this->queueFixture('North');
+        [$south, $otherManager, $otherDriver, , $otherQr] = $this->queueFixture('South');
+        $driver->update(['organization_id' => $south->id]);
+        Trip::create([
+            'trip_id' => 'TRIP-PRIOR-TODA', 'driver_id' => $driver->id,
+            'destination' => 'Prior destination', 'passenger_count' => 1, 'status' => 'completed',
+            'departure_time' => now()->subHour(), 'arrival_time' => now()->subMinutes(30),
+        ]);
+        $driver->update(['organization_id' => $north->id]);
+        $this->scan($manager, $qr, 'North Terminal');
+        $this->scan($otherManager, $otherQr, 'South Terminal');
+
+        $url = route('manager.queues.monitoring');
+        $feedUrl = route('manager.queues.feed', ['driver_id' => $driver->id]);
+        $this->actingAs($manager, 'web')->get(route('manager.dashboard'))->assertOk()->assertSee($url);
+        $this->get($url)->assertOk()
+            ->assertSee('North Terminal')
+            ->assertSee(route('manager.reports'))
+            ->assertSee(route('manager.queues.feed', ['page' => 1]))
+            ->assertDontSee('South Terminal')
+            ->assertDontSee('South Driver')
+            ->assertDontSee('Download PDF')
+            ->assertViewHas('summary', fn ($summary) => $summary['Total Drivers Waiting'] === 1);
+        $feed = $this->get($feedUrl)->assertOk();
+        $records = $feed->viewData('records');
+        $this->assertSame(1, $records->total());
+        $this->assertSame($driver->id, $records->first()['driver_id']);
+        $this->assertSame(0, $records->first()['total_trips']);
+        $this->assertStringStartsWith($url, $records->url(2));
+        $this->get($feedUrl, ['If-None-Match' => $feed->headers->get('ETag')])->assertStatus(304);
+        foreach (['manager.queues.monitoring', 'manager.queues.feed'] as $route) {
+            $this->getJson(route($route, ['driver_id' => $otherDriver->id]))->assertUnprocessable()->assertJsonValidationErrors('driver_id');
+            $this->getJson(route($route, ['organization_id' => $south->id]))->assertUnprocessable()->assertJsonValidationErrors('organization_id');
+        }
+
+        $this->actingAs($manager, 'sanctum')->postJson('/api/manager/queue/serve-next')->assertOk();
+        $this->actingAs($manager, 'web')->get($feedUrl, ['If-None-Match' => $feed->headers->get('ETag')])
+            ->assertOk()->assertViewHas('summary', fn ($summary) => $summary['Total Drivers On Trip'] === 1);
+
+        $driver->update(['organization_id' => $south->id, 'assigned_terminal' => 'Private reassignment']);
+        $this->get($url)->assertOk()->assertSee('North Driver')->assertDontSee('Private reassignment');
+    }
+
+    public function test_manager_queue_routes_require_manager_access_and_a_changed_temporary_password(): void
+    {
+        [, $manager] = $this->queueFixture('Access');
+        $manager->update(['must_change_password' => true]);
+
+        foreach (['manager.queues.monitoring', 'manager.queues.feed'] as $route) {
+            $this->actingAs($manager, 'web')->get(route($route))->assertRedirect(route('manager.password.change'));
+        }
+        $admin = User::factory()->create(['role' => 'SUPER_ADMIN']);
+        $this->actingAs($admin, 'web')->get(route('manager.queues.feed'))->assertForbidden();
     }
 
     private function scan(User $manager, QrCode $qr, string $terminal, string $action = 'join'): TestResponse
