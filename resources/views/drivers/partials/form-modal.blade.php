@@ -8,7 +8,7 @@
 @endphp
 
 <div class="modal fade" id="{{ $modalId }}" tabindex="-1" aria-labelledby="{{ $modalId }}Label" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered {{ $isCreate ? '' : 'modal-lg driver-edit-dialog' }}">
+    <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable modal-lg {{ $isCreate ? '' : 'driver-edit-dialog' }}">
         <form class="modal-content driver-modal {{ $isCreate ? '' : 'driver-edit-modal' }}" action="{{ $action }}" method="POST">
             @csrf
             @if ($method !== 'POST')
