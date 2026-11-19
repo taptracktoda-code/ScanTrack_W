@@ -10,14 +10,9 @@
 }
 
 .admin-drivers-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    flex-wrap: wrap;
-    gap: 16px;
     padding: clamp(20px, 3cqi, 34px);
     border-radius: 16px;
-    background: radial-gradient(ellipse at top right, #244893 0%, transparent 60%), #12244c;
+    background: var(--dashboard-blue);
     color: #fff;
 }
 
@@ -37,13 +32,6 @@
 
 .admin-drivers-header p { color: #d7e4ff; }
 
-.admin-drivers-header-actions {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
-}
-
-.admin-drivers-header-actions .btn,
 .admin-driver-search .btn {
     display: inline-flex;
     align-items: center;
@@ -53,23 +41,6 @@
     font-size: .825rem;
     font-weight: 650;
 }
-
-.admin-drivers-header .admin-drivers-add {
-    background: #fff;
-    color: #173572;
-    border-color: #fff;
-}
-
-.admin-drivers-header .admin-drivers-add:hover,
-.admin-drivers-header .admin-drivers-add:focus-visible { background: #e8f0ff; color: #113166; }
-
-.admin-drivers-header .admin-drivers-verify {
-    border-color: #8ba6d8;
-    color: #fff;
-}
-
-.admin-drivers-header .admin-drivers-verify:hover,
-.admin-drivers-header .admin-drivers-verify:focus-visible { background: #324e83; color: #fff; }
 
 .admin-drivers-metrics {
     display: grid;

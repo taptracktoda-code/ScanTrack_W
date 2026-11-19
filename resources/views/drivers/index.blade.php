@@ -16,18 +16,8 @@
 
     <div class="admin-drivers">
         <header class="admin-drivers-header">
-            <div>
-                <h1>Drivers</h1>
-                <p>Manage driver accounts, vehicles, and assignments.</p>
-            </div>
-            <div class="admin-drivers-header-actions">
-                <a class="btn admin-drivers-verify" href="{{ route('drivers.verification') }}">
-                    <i class="bi bi-shield-check" aria-hidden="true"></i> Driver verification
-                </a>
-                <button class="btn admin-drivers-add" type="button" data-bs-toggle="modal" data-bs-target="#driverCreateModal">
-                    <i class="bi bi-person-plus" aria-hidden="true"></i> Add driver
-                </button>
-            </div>
+            <h1>Drivers</h1>
+            <p>Manage driver accounts, vehicles, and assignments.</p>
         </header>
 
         @if (session('status'))
@@ -88,7 +78,9 @@
                 <div class="admin-drivers-empty">
                     <i class="bi bi-person-lines-fill" aria-hidden="true"></i>
                     <h3>{{ $search !== '' ? 'No matching drivers' : 'No drivers yet' }}</h3>
-                    <p>{{ $search !== '' ? 'Search for a different name, driver ID, plate, or TODA.' : 'Use Add driver to submit the first account for verification.' }}</p>
+                    @if ($search !== '')
+                        <p>Search for a different name, driver ID, plate, or TODA.</p>
+                    @endif
                 </div>
             @else
                 <table class="table mb-0 admin-driver-table" role="table" aria-labelledby="driver-directory-heading">
@@ -210,13 +202,4 @@
             @include('drivers.partials.qr-modal', ['driver' => $driver, 'displayName' => $driver->name ?: 'Unnamed Driver'])
         @endif
     @endforeach
-
-    @include('drivers.partials.form-modal', [
-        'modalId' => 'driverCreateModal',
-        'title' => 'Add New Driver',
-        'action' => route('drivers.register'),
-        'method' => 'POST',
-        'driver' => null,
-        'organizations' => $organizations,
-    ])
 @endsection

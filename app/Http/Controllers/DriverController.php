@@ -5,7 +5,6 @@ namespace App\Http\Controllers;
 use App\Models\Driver;
 use App\Models\QrCode;
 use App\Models\TerminalActivity;
-use App\Models\TodaOrganization;
 use App\Models\User;
 use App\Models\Vehicle;
 use App\Mail\DriverAccountCreatedMail;
@@ -44,7 +43,6 @@ class DriverController extends Controller
         }
 
         $drivers = $driverQuery->latest()->get();
-        $organizations = TodaOrganization::orderBy('name')->get();
         $driverAccounts = User::whereIn('user_id', $drivers->map(fn (Driver $driver): string => 'DRIVER-' . strtoupper((string) $driver->id)))
             ->get()
             ->keyBy('user_id');
@@ -56,7 +54,7 @@ class DriverController extends Controller
             'suspended' => Driver::where('status', 'Suspended')->count(),
         ];
 
-        return view('drivers.index', compact('drivers', 'stats', 'organizations', 'driverAccounts', 'search'));
+        return view('drivers.index', compact('drivers', 'stats', 'driverAccounts', 'search'));
     }
 
     public function search(Request $request): JsonResponse
