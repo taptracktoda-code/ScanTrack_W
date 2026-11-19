@@ -23,6 +23,7 @@ class Driver extends Model
         'address',
         'license_expiration_date',
         'organization_id',
+        'assigned_terminal',
         'approved_at',
         'approved_by',
         'rejected_at',

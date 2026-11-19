@@ -1,0 +1,178 @@
+.queue-monitoring {
+    container: queue-monitoring / inline-size;
+    min-width: 0;
+}
+
+.queue-monitoring .form-control,
+.queue-monitoring .form-select {
+    min-width: 0;
+    max-width: 100%;
+}
+
+.queue-filter-form,
+.queue-export-form {
+    display: grid;
+    align-items: end;
+    gap: 12px;
+}
+
+.queue-filter-form {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.queue-filter-actions {
+    grid-column: 1 / -1;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.queue-export-form {
+    grid-template-columns: minmax(0, 26rem) auto;
+    justify-content: start;
+    border-top: 1px solid var(--dashboard-border);
+    margin-top: 16px;
+    padding-top: 16px;
+}
+
+.queue-metrics {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 12px;
+    margin-bottom: 16px;
+}
+
+.queue-metrics .reports-metric {
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 12px;
+}
+
+.queue-metrics .reports-metric-value {
+    margin: 0;
+}
+
+.queue-monitoring .queue-table {
+    min-width: 0;
+    table-layout: fixed;
+}
+
+.queue-monitoring .queue-table :is(th, td) {
+    vertical-align: top;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    padding: 10px;
+}
+
+.queue-table .reports-driver-name {
+    font-size: 0.85rem;
+}
+
+.queue-cell-label {
+    display: none;
+}
+
+.queue-record-status {
+    font-weight: 700;
+}
+
+.queue-pagination {
+    padding: 12px 14px 0;
+}
+
+.queue-pagination .pagination {
+    flex-wrap: wrap;
+    justify-content: center;
+}
+
+@container queue-monitoring (max-width: 64rem) {
+    .queue-table-wrap {
+        overflow: visible;
+    }
+
+    .queue-table,
+    .queue-table tbody {
+        display: block;
+    }
+
+    .queue-table tbody {
+        display: grid;
+        gap: 12px;
+        padding: 0 12px 12px;
+    }
+
+    .queue-table thead {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+        clip-path: inset(50%);
+        white-space: nowrap;
+    }
+
+    .queue-monitoring .queue-table tbody > tr {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        border: 1px solid var(--dashboard-border);
+        border-radius: 8px;
+    }
+
+    .queue-monitoring .queue-table tbody :is(.reports-driver-name, .reports-table-empty) {
+        grid-column: 1 / -1;
+    }
+
+    .queue-table tbody .reports-driver-name {
+        --bs-table-bg: #f7f9fb;
+        border-radius: 8px 8px 0 0;
+        font-size: 1rem;
+    }
+
+    .queue-monitoring .queue-table tbody td {
+        border: 0;
+    }
+
+    .queue-cell-label {
+        display: block;
+        color: var(--dashboard-muted);
+        font-size: 0.72rem;
+        font-weight: 700;
+        margin-bottom: 3px;
+    }
+}
+
+@container queue-monitoring (max-width: 48rem) {
+    .queue-filter-form,
+    .queue-metrics,
+    .queue-monitoring .queue-table tbody > tr {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .queue-metrics .reports-metric:last-child:nth-child(odd) {
+        grid-column: span 2;
+    }
+}
+
+@container queue-monitoring (max-width: 30rem) {
+    .queue-monitoring .reports-header,
+    .queue-monitoring .reports-table-heading {
+        align-items: flex-start;
+        flex-direction: column;
+        gap: 8px;
+    }
+
+    .queue-export-form {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .queue-monitoring .reports-primary-action {
+        width: auto;
+    }
+}
+
+@container queue-monitoring (max-width: 23rem) {
+    .queue-filter-form {
+        grid-template-columns: minmax(0, 1fr);
+    }
+}

@@ -62,6 +62,10 @@
                                         <option value="Suspended" @selected($driverStatus === 'Suspended')>Suspended</option>
                                     </select>
                                 </div>
+                                <div class="col-12">
+                                    <label class="form-label" for="{{ $modalId }}-terminal">Assigned terminal</label>
+                                    <input class="form-control" id="{{ $modalId }}-terminal" name="assigned_terminal" value="{{ old('assigned_terminal', $driver->assigned_terminal) }}" maxlength="255">
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -120,6 +124,10 @@
                                     <option value="{{ $organization->id }}" @selected(old('organization_id') == $organization->id)>{{ $organization->name }}</option>
                                 @endforeach
                             </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label" for="{{ $modalId }}-terminal">Assigned terminal</label>
+                            <input class="form-control" id="{{ $modalId }}-terminal" name="assigned_terminal" value="{{ old('assigned_terminal') }}" maxlength="255">
                         </div>
                     @endif
                     <div class="col-md-6">

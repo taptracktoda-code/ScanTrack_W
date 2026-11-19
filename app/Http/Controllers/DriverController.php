@@ -133,6 +133,7 @@ class DriverController extends Controller
             'plate_number' => ['required', 'string', 'max:80', 'unique:vehicles,plate_number'],
             'vehicle_type' => ['required', 'string', 'max:80'],
             'organization_id' => ['required', 'exists:toda_organizations,id'],
+            'assigned_terminal' => ['nullable', 'string', 'max:255'],
         ]);
 
         $driver = DB::transaction(function () use ($attributes): Driver {
@@ -148,6 +149,7 @@ class DriverController extends Controller
                 'address' => $attributes['address'],
                 'vehicle_number' => $attributes['plate_number'],
                 'organization_id' => $attributes['organization_id'],
+                'assigned_terminal' => $attributes['assigned_terminal'] ?? null,
                 'registered_by' => auth()->id(),
                 'status' => 'Pending',
             ]);
@@ -340,6 +342,7 @@ class DriverController extends Controller
             'license_number' => ['required', 'string', 'max:80'],
             'contact_number' => ['required', 'string', 'max:40'],
             'vehicle_number' => ['nullable', 'string', 'max:80'],
+            'assigned_terminal' => ['nullable', 'string', 'max:255'],
             'status' => ['required', 'in:Pending,Active,Inactive,Suspended'],
         ]);
     }

@@ -19,6 +19,7 @@ class OperationsReportPdf
                 $this->attendance($snapshot['attendance']),
                 $this->queue($snapshot['queue']),
                 $this->trips($snapshot['trips']),
+                $this->assignments($snapshot['assignments']),
             ],
         };
 
@@ -57,7 +58,7 @@ class OperationsReportPdf
     {
         return [
             'title' => 'Terminal attendance',
-            'headers' => ['Driver and ID' => 21, 'TODA' => 17, 'Terminal' => 16, 'Entry date and time' => 23, 'Exit date and time' => 23],
+            'headers' => ['Driver and ID' => 20, 'TODA' => 15, 'Terminals' => 23, 'Entry date and time' => 21, 'Exit date and time' => 21],
             'rows' => $visits->map(fn ($row) => [
                 ...$this->identity($row),
                 OperationsReport::timestamp(OperationsReport::scanTime($row['entry'])),
@@ -71,8 +72,8 @@ class OperationsReportPdf
         return [
             'title' => 'Queue sessions',
             'headers' => [
-                'Driver and ID' => 12, 'TODA' => 9, 'Terminal' => 9, 'Entry / Exit date and time' => 15,
-                'Queue no. / Current position' => 10, 'Joined' => 11, 'Queue status' => 8,
+                'Driver and ID' => 12, 'TODA' => 8, 'Terminals' => 13, 'Entry / Exit date and time' => 14,
+                'Queue no. / Current position' => 9, 'Joined' => 10, 'Queue status' => 8,
                 'Total waiting' => 7, 'Trip start / completion' => 12, 'Driver trips completed (all time)' => 7,
             ],
             'rows' => $sessions->map(fn ($row) => [
@@ -96,7 +97,7 @@ class OperationsReportPdf
         return [
             'title' => 'Recorded trips',
             'headers' => [
-                'Driver and ID' => 14, 'TODA' => 10, 'Terminal' => 10, 'Trip ID and destination' => 24,
+                'Driver and ID' => 14, 'TODA' => 10, 'Terminals' => 16, 'Trip ID and destination' => 18,
                 'Departure' => 14, 'Completion' => 14, 'Trip status' => 7, 'Driver trips completed (all time)' => 7,
             ],
             'rows' => $trips->map(fn ($row) => [
@@ -149,8 +150,22 @@ class OperationsReportPdf
 
         return [
             'title' => 'Terminal operations timeline',
-            'headers' => ['Driver and ID' => 20, 'TODA' => 15, 'Terminal' => 15, 'Date and time' => 22, 'Activity' => 28],
+            'headers' => ['Driver and ID' => 20, 'TODA' => 15, 'Terminals' => 20, 'Date and time' => 20, 'Activity' => 25],
             'rows' => $events->sortByDesc(fn ($event) => $event[0])->pluck(1),
+        ];
+    }
+
+    private function assignments(Collection $drivers): array
+    {
+        return [
+            'title' => 'Current driver terminal assignments',
+            'headers' => ['Driver and ID' => 34, 'Current TODA' => 33, 'Assigned terminal' => 33],
+            'rows' => $drivers->map(fn ($row) => [
+                $row['driver']."\nID ".$row['driver_id'],
+                $row['organization'],
+                $row['assigned_terminal'] ?? 'Unassigned',
+            ]),
+            'empty' => 'No drivers match these filters.',
         ];
     }
 
@@ -159,7 +174,8 @@ class OperationsReportPdf
         return [
             $row['driver']."\nID ".$row['driver_id'],
             $row['organization'],
-            $row['terminal'] ?? OperationsReport::UNKNOWN,
+            'Assigned: '.($row['assigned_terminal'] ?? 'Unassigned')
+                ."\nRecorded: ".($row['terminal'] ?? OperationsReport::UNKNOWN),
         ];
     }
 }

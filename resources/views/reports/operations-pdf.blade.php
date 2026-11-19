@@ -31,7 +31,7 @@
         <div class="metadata">
             <strong>{{ $title }}</strong><br>
             Reporting period {{ $period }} · Philippine Standard Time (Asia/Manila)<br>
-            Generated {{ $generatedAt }}
+            Generated {{ $generatedAt }} · Terminal assignments are current as of generation.
         </div>
     </header>
     @foreach ($sections as $section)

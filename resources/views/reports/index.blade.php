@@ -110,7 +110,7 @@
             <div class="reports-table-heading">
                 <div>
                     <h2>Driver records</h2>
-                    <p>Current driver registration details.</p>
+                    <p>Driver registrations and current terminal assignments.</p>
                 </div>
                 <span class="reports-record-count"><i class="bi bi-people" aria-hidden="true"></i>{{ number_format($drivers->count()) }} drivers</span>
             </div>
@@ -123,6 +123,7 @@
                             <th scope="col">License</th>
                             <th scope="col">Contact</th>
                             <th scope="col">Plate number</th>
+                            <th scope="col">Assigned terminal</th>
                             <th scope="col">Status</th>
                             <th scope="col">Last updated</th>
                         </tr>
@@ -134,11 +135,12 @@
                                 <td>{{ $driver->license_number ?: 'Not set' }}</td>
                                 <td>{{ $driver->contact_number ?: 'Not set' }}</td>
                                 <td class="reports-plate">{{ $driver->vehicle_number ?: 'Unassigned' }}</td>
+                                <td>{{ $driver->assigned_terminal ?? 'Unassigned' }}</td>
                                 <td><span class="driver-status-badge {{ $driver->status === 'Active' ? 'is-active' : 'is-suspended' }}">{{ $driver->status }}</span></td>
                                 <td>{{ optional($driver->updated_at)->format('M j, Y') }}</td>
                             </tr>
                         @empty
-                            <tr><td colspan="6" class="reports-table-empty">No driver records found. Register a driver to populate reports.</td></tr>
+                            <tr><td colspan="7" class="reports-table-empty">No driver records found. Register a driver to populate reports.</td></tr>
                         @endforelse
                     </tbody>
                 </table>

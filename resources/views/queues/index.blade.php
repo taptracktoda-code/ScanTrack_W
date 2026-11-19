@@ -2,10 +2,11 @@
 
 @push('styles')
     <link href="{{ asset('css/reports.css') }}" rel="stylesheet">
+    <link href="{{ asset('css/queue-monitoring.css') }}" rel="stylesheet">
 @endpush
 
 @section('content')
-    <main class="reports-page">
+    <div class="reports-page queue-monitoring">
         <header class="reports-header">
             <div>
                 <h1 class="reports-title">Queue Monitoring</h1>
@@ -14,10 +15,10 @@
             <a class="btn reports-primary-action" href="{{ route('reports') }}">Back to Reports</a>
         </header>
 
-        <section class="reports-panel mb-4" aria-label="Queue filters and PDF export">
-            <form method="GET" action="{{ route('queues.monitoring') }}" class="row g-3 align-items-end mb-3">
-                <div class="col-12 col-sm-6 col-xl-4">
-                    <label class="form-label" for="queue-terminal">Terminal</label>
+        <section class="reports-panel" aria-label="Queue filters and PDF export">
+            <form method="GET" action="{{ route('queues.monitoring') }}" class="queue-filter-form">
+                <div>
+                    <label class="form-label" for="queue-terminal">Recorded terminal</label>
                     <select class="form-select" id="queue-terminal" name="terminal">
                         <option value="">All terminals</option>
                         @foreach ($terminals as $terminal)
@@ -25,7 +26,7 @@
                         @endforeach
                     </select>
                 </div>
-                <div class="col-12 col-sm-6 col-xl-4">
+                <div>
                     <label class="form-label" for="queue-organization">TODA association</label>
                     <select class="form-select" id="queue-organization" name="organization_id">
                         <option value="">All TODAs</option>
@@ -34,7 +35,7 @@
                         @endforeach
                     </select>
                 </div>
-                <div class="col-12 col-sm-6 col-xl-4">
+                <div>
                     <label class="form-label" for="queue-driver">Driver</label>
                     <select class="form-select" id="queue-driver" name="driver_id">
                         <option value="">All drivers</option>
@@ -43,15 +44,15 @@
                         @endforeach
                     </select>
                 </div>
-                <div class="col-12 col-sm-6 col-xl-4">
+                <div>
                     <label class="form-label" for="queue-start">From date</label>
                     <input class="form-control" type="date" id="queue-start" name="start_date" value="{{ $filters['start_date'] ?? '' }}">
                 </div>
-                <div class="col-12 col-sm-6 col-xl-4">
+                <div>
                     <label class="form-label" for="queue-end">Through date</label>
                     <input class="form-control" type="date" id="queue-end" name="end_date" value="{{ $filters['end_date'] ?? '' }}">
                 </div>
-                <div class="col-12 col-sm-6 col-xl-4">
+                <div>
                     <label class="form-label" for="queue-status">Queue status</label>
                     <select class="form-select" id="queue-status" name="status">
                         <option value="">All statuses</option>
@@ -61,19 +62,19 @@
                     </select>
                 </div>
                 @if ($errors->any())
-                    <div class="col-12 text-danger" role="alert">{{ $errors->first() }}</div>
+                    <div class="queue-filter-actions text-danger" role="alert">{{ $errors->first() }}</div>
                 @endif
-                <div class="col-12 d-flex gap-2">
+                <div class="queue-filter-actions">
                     <button class="btn btn-primary" type="submit">Apply filters</button>
                     <a class="btn btn-outline-secondary" href="{{ route('queues.monitoring') }}">Clear</a>
                 </div>
             </form>
 
-            <form method="GET" action="{{ route('reports.export') }}" class="row g-2 align-items-end">
+            <form method="GET" action="{{ route('reports.export') }}" class="queue-export-form">
                 @foreach ($filters as $key => $value)
                     <input type="hidden" name="{{ $key }}" value="{{ $value }}">
                 @endforeach
-                <div class="col-12 col-md-auto">
+                <div>
                     <label class="form-label" for="queue-report-type">PDF report</label>
                     <select class="form-select" id="queue-report-type" name="type">
                         @foreach ($reportTypes as $type => $title)
@@ -81,17 +82,15 @@
                         @endforeach
                     </select>
                 </div>
-                <div class="col-auto">
-                    <button class="btn btn-outline-primary" type="submit">Download PDF</button>
-                </div>
+                <button class="btn btn-outline-primary" type="submit">Download PDF</button>
             </form>
         </section>
 
-        <p id="queue-refresh-status" class="small text-muted" role="status">Refreshes automatically every 20 seconds while this tab is visible.</p>
+        <p id="queue-refresh-status" class="small text-muted mb-0" role="status">Refreshes automatically every 20 seconds while this tab is visible.</p>
         <div id="queue-live-records" data-feed="{{ route('queues.feed', $filters + ['page' => $records->currentPage()]) }}">
             @include('queues.records')
         </div>
-    </main>
+    </div>
 @endsection
 
 @push('scripts')

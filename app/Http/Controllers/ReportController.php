@@ -35,7 +35,7 @@ class ReportController extends Controller
     {
         $filters = $reports->filters($request);
         $type = $request->validate(['type' => ['sometimes', Rule::in(array_keys(OperationsReport::TYPES))]])['type'] ?? 'combined';
-        $bytes = $pdf->render($type, $filters, $reports->snapshot($filters));
+        $bytes = $pdf->render($type, $filters, $reports->snapshot($filters, includeAssignments: $type === 'combined'));
         $filename = $type.'-'.now(OperationsReport::ZONE)->toDateString().'.pdf';
 
         return response($bytes, 200, [

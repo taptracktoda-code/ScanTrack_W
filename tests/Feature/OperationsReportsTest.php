@@ -101,7 +101,7 @@ class OperationsReportsTest extends TestCase
             $entry->update(['status' => 'SERVING', 'served_at' => now()]);
             $row = $view->getData()['sections'][0]['rows']->sole();
             $this->assertContains('Waiting', $row);
-            $this->assertContains('Snapshot Terminal', $row);
+            $this->assertContains("Assigned: Unassigned\nRecorded: Snapshot Terminal", $row);
             $rendered = true;
         });
 
@@ -132,6 +132,42 @@ class OperationsReportsTest extends TestCase
         $otherTerminal = app(OperationsReport::class)->snapshot(['terminal' => 'Other Terminal']);
         $this->assertTrue($otherTerminal['queue']->isEmpty());
         $this->assertSame('EXIT', $otherTerminal['attendance']->sole()['exit']->attendance_type);
+    }
+
+    public function test_reports_show_current_terminal_assignments_independently_of_scans(): void
+    {
+        $admin = User::factory()->create(['role' => 'SUPER_ADMIN']);
+        [$organization, $manager, $driver, , $qr] = $this->queueFixture('Assigned');
+        [, , $noScans] = $this->queueFixture('Unassigned', $organization, $manager);
+        $this->scan($manager, $qr, 'Market Terminal');
+
+        $this->actingAs($admin, 'web')->put(route('drivers.update', $driver), [
+            ...$driver->only('name', 'license_number', 'contact_number', 'vehicle_number', 'status'),
+            'assigned_terminal' => 'Harbor Terminal',
+        ])->assertRedirect(route('drivers'));
+        $this->assertSame('Harbor Terminal', $driver->refresh()->assigned_terminal);
+        $this->get(route('reports'))->assertOk()->assertSee('Assigned terminal')->assertSee('Harbor Terminal');
+        $this->get(route('queues.monitoring', ['terminal' => 'Market Terminal']))->assertOk()
+            ->assertSee('Assigned · Harbor Terminal')
+            ->assertSee('Recorded · Market Terminal')
+            ->assertSee('queue-monitoring.css');
+
+        View::composer('reports.operations-pdf', function ($view) use ($driver, $noScans): void {
+            $sections = collect($view->getData()['sections'])->keyBy('title');
+            $this->assertContains("Assigned: Harbor Terminal\nRecorded: Market Terminal", $sections['Queue sessions']['rows']->sole());
+            $assignments = $sections['Current driver terminal assignments']['rows'];
+            $this->assertSame('Harbor Terminal', $assignments[$driver->id][2]);
+            $this->assertSame('Unassigned', $assignments[$noScans->id][2]);
+        });
+        $this->get(route('reports.export', ['type' => 'combined']))->assertOk()->assertDownload();
+        $filtered = app(OperationsReport::class)->snapshot(['terminal' => 'Market Terminal'], includeAssignments: true);
+        $this->assertSame([$driver->id], $filtered['assignments']->keys()->all());
+
+        $this->put(route('drivers.update', $driver), [
+            ...$driver->only('name', 'license_number', 'contact_number', 'vehicle_number', 'status'),
+            'assigned_terminal' => '',
+        ])->assertRedirect(route('drivers'));
+        $this->assertNull($driver->refresh()->assigned_terminal);
     }
 
     private function scan(User $manager, QrCode $qr, string $terminal, string $action = 'join'): TestResponse

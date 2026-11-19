@@ -2,14 +2,12 @@
     use App\Services\OperationsReport;
 @endphp
 
-<section class="row row-cols-1 row-cols-sm-2 row-cols-xl-5 g-3 mb-4" aria-label="Queue and terminal totals">
+<section class="queue-metrics" aria-label="Queue and terminal totals">
     @foreach ($summary as $label => $value)
-        <div class="col">
-            <article class="reports-metric h-100">
-                <div class="reports-metric-heading"><span>{{ $label }}</span></div>
-                <strong class="reports-metric-value">{{ number_format($value) }}</strong>
-            </article>
-        </div>
+        <article class="reports-metric">
+            <div class="reports-metric-heading">{{ $label }}</div>
+            <strong class="reports-metric-value">{{ number_format($value) }}</strong>
+        </article>
     @endforeach
 </section>
 
@@ -21,61 +19,84 @@
         </div>
         <span class="reports-record-count">{{ number_format($records->total()) }} records</span>
     </div>
-    <div class="table-responsive" data-queue-scroll tabindex="0" aria-label="Queue and attendance records table">
-        <table class="table reports-table align-middle mb-0">
-            <thead>
-                <tr>
-                    <th scope="col">Driver</th>
-                    <th scope="col">TODA</th>
-                    <th scope="col">Terminal</th>
-                    <th scope="col">Entry / Exit</th>
-                    <th scope="col">Queue no. / Current position</th>
-                    <th scope="col">Joined queue</th>
-                    <th scope="col">Queue status</th>
-                    <th scope="col">Total waiting</th>
-                    <th scope="col">Trip start / Completion</th>
-                    <th scope="col">Driver trips completed (all time)</th>
+    <div class="table-responsive queue-table-wrap" data-queue-scroll>
+        <table class="table reports-table queue-table mb-0" role="table" aria-labelledby="queue-records-heading">
+            <thead role="rowgroup">
+                <tr role="row">
+                    <th scope="col" role="columnheader">Driver</th>
+                    <th scope="col" role="columnheader">TODA</th>
+                    <th scope="col" role="columnheader">Terminals</th>
+                    <th scope="col" role="columnheader">Entry / Exit</th>
+                    <th scope="col" role="columnheader">Queue no. / Position</th>
+                    <th scope="col" role="columnheader">Joined queue</th>
+                    <th scope="col" role="columnheader">Status</th>
+                    <th scope="col" role="columnheader">Waiting time</th>
+                    <th scope="col" role="columnheader">Trip start / Completion</th>
+                    <th scope="col" role="columnheader">Trips completed (all time)</th>
                 </tr>
             </thead>
-            <tbody>
+            <tbody role="rowgroup">
                 @forelse ($records as $row)
-                    <tr>
-                        <th scope="row" class="reports-driver-name">{{ $row['driver'] }}<div class="small text-muted">ID {{ $row['driver_id'] }}</div></th>
-                        <td>{{ $row['organization'] }}</td>
-                        <td>{{ $row['terminal'] ?? OperationsReport::UNKNOWN }}</td>
-                        <td class="text-nowrap">
-                            <div>In {{ OperationsReport::timestamp(OperationsReport::scanTime($row['entry'])) }}</div>
-                            <div>Out {{ OperationsReport::timestamp(OperationsReport::scanTime($row['exit'])) }}</div>
+                    <tr role="row" class="queue-record">
+                        <th scope="row" role="rowheader" class="reports-driver-name">
+                            {{ $row['driver'] }}
+                            <div class="small text-muted">ID {{ $row['driver_id'] }}</div>
+                        </th>
+                        <td role="cell">
+                            <span class="queue-cell-label" aria-hidden="true">TODA</span>
+                            {{ $row['organization'] }}
                         </td>
-                        <td>
+                        <td role="cell">
+                            <span class="queue-cell-label" aria-hidden="true">Terminals</span>
+                            <div>Assigned · {{ $row['assigned_terminal'] ?? 'Unassigned' }}</div>
+                            <div>Recorded · {{ $row['terminal'] ?? OperationsReport::UNKNOWN }}</div>
+                        </td>
+                        <td role="cell">
+                            <span class="queue-cell-label" aria-hidden="true">Entry / Exit</span>
+                            <div>In · {{ OperationsReport::timestamp(OperationsReport::scanTime($row['entry'])) }}</div>
+                            <div>Out · {{ OperationsReport::timestamp(OperationsReport::scanTime($row['exit'])) }}</div>
+                        </td>
+                        <td role="cell">
+                            <span class="queue-cell-label" aria-hidden="true">Queue no. / Position</span>
                             <div>{{ $row['queue'] ? '#'.$row['queue']->queue_number : OperationsReport::UNKNOWN }}</div>
-                            <div>{{ $row['position'] ?? OperationsReport::UNKNOWN }}</div>
+                            <div>Position · {{ $row['position'] ?? OperationsReport::UNKNOWN }}</div>
                         </td>
-                        <td class="text-nowrap">{{ OperationsReport::timestamp($row['queue']?->created_at) }}</td>
-                        <td>
+                        <td role="cell">
+                            <span class="queue-cell-label" aria-hidden="true">Joined queue</span>
+                            {{ OperationsReport::timestamp($row['queue']?->created_at) }}
+                        </td>
+                        <td role="cell" class="queue-record-status">
+                            <span class="queue-cell-label" aria-hidden="true">Status</span>
                             {{ OperationsReport::STATUSES[$row['queue']?->status] ?? OperationsReport::UNKNOWN }}
                             @if ($row['queue']?->removed_at)
                                 <div class="small text-muted">Manual removal</div>
                             @endif
                         </td>
-                        <td class="text-nowrap">{{ OperationsReport::duration($row['waiting']) }}</td>
-                        <td class="text-nowrap">
+                        <td role="cell">
+                            <span class="queue-cell-label" aria-hidden="true">Waiting time</span>
+                            {{ OperationsReport::duration($row['waiting']) }}
+                        </td>
+                        <td role="cell">
+                            <span class="queue-cell-label" aria-hidden="true">Trip start / Completion</span>
                             @if ($row['trip'])
-                                <div>{{ OperationsReport::timestamp($row['trip']->departure_time) }}</div>
-                                <div>{{ OperationsReport::timestamp($row['trip']->arrival_time) }}</div>
+                                <div>Start · {{ OperationsReport::timestamp($row['trip']->departure_time) }}</div>
+                                <div>End · {{ OperationsReport::timestamp($row['trip']->arrival_time) }}</div>
                             @else
                                 No Trip Recorded
                             @endif
                         </td>
-                        <td>{{ $row['total_trips'] }}</td>
+                        <td role="cell">
+                            <span class="queue-cell-label" aria-hidden="true">Trips completed (all time)</span>
+                            {{ $row['total_trips'] }}
+                        </td>
                     </tr>
                 @empty
-                    <tr><td colspan="10" class="reports-table-empty">No records match these filters.</td></tr>
+                    <tr role="row"><td role="cell" colspan="10" class="reports-table-empty">No records match these filters.</td></tr>
                 @endforelse
             </tbody>
         </table>
     </div>
     @if ($records->hasPages())
-        <div class="px-3 pt-3">{{ $records->links('pagination::bootstrap-5') }}</div>
+        <div class="queue-pagination">{{ $records->onEachSide(1)->links('pagination::bootstrap-5') }}</div>
     @endif
 </section>

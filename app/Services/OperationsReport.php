@@ -46,7 +46,7 @@ class OperationsReport
         ]), fn ($value) => $value !== null);
     }
 
-    public function snapshot(array $filters): array
+    public function snapshot(array $filters, bool $includeAssignments = false): array
     {
         $connection = DB::connection();
         $outermost = $connection->transactionLevel() === 0;
@@ -70,7 +70,8 @@ class OperationsReport
                     ->get(['id', 'driver_id', 'organization_id', 'status'])->groupBy('organization_id'),
                 Trip::with('destinationRecord:id,organization_id')
                     ->when($driverId, fn ($query) => $query->where('driver_id', $driverId))->get(),
-                Driver::when($driverId, fn ($query) => $query->whereKey($driverId))->pluck('name', 'id'),
+                Driver::when($driverId, fn ($query) => $query->whereKey($driverId))
+                    ->orderBy('name')->orderBy('id')->get(['id', 'name', 'organization_id', 'assigned_terminal'])->keyBy('id'),
                 TodaOrganization::pluck('name', 'id'),
             ];
         });
@@ -114,10 +115,11 @@ class OperationsReport
 
         $identity = fn ($driverId, $organizationId, $terminal) => [
             'driver_id' => $driverId,
-            'driver' => $drivers[$driverId] ?? self::UNKNOWN,
+            'driver' => $drivers->get($driverId)?->name ?? self::UNKNOWN,
             'organization_id' => $organizationId,
             'organization' => $organizations[$organizationId] ?? self::UNKNOWN,
             'terminal' => $terminal,
+            'assigned_terminal' => $drivers->get($driverId)?->assigned_terminal,
             'total_trips' => $completedByDriver[$driverId] ?? 0,
         ];
 
@@ -190,6 +192,21 @@ class OperationsReport
         }
 
         $countDrivers = fn ($status) => $queueRows->filter(fn ($row) => $row['queue']->status === $status)->unique('driver_id')->count();
+        $assignments = collect();
+        if ($includeAssignments) {
+            if (isset($filters['terminal']) || isset($filters['start_date']) || isset($filters['end_date']) || isset($filters['status'])) {
+                $matchingDrivers = $queueRows->concat($attendanceRows)->concat($tripRows)->pluck('driver_id')->flip();
+                $drivers = $drivers->intersectByKeys($matchingDrivers);
+            } elseif (isset($filters['organization_id'])) {
+                $drivers = $drivers->where('organization_id', $filters['organization_id']);
+            }
+            $assignments = $drivers->map(fn (Driver $driver) => [
+                'driver_id' => $driver->id,
+                'driver' => $driver->name,
+                'organization' => $organizations[$driver->organization_id] ?? self::UNKNOWN,
+                'assigned_terminal' => $driver->assigned_terminal,
+            ]);
+        }
 
         return [
             'summary' => [
@@ -205,6 +222,7 @@ class OperationsReport
             'queue' => $this->latestFirst($queueRows),
             'trips' => $tripRows->sortByDesc(fn ($row) => $row['trip']->departure_time)->values(),
             'records' => $this->latestFirst($queueRows->concat($standaloneRows)),
+            'assignments' => $assignments,
         ];
     }
 
