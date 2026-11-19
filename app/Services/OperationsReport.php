@@ -51,7 +51,7 @@ class OperationsReport
         ]), fn ($value) => $value !== null);
     }
 
-    public function snapshot(array $filters, bool $includeAssignments = false, ?int $managedOrganizationId = null): array
+    public function snapshot(array $filters, bool $includeRoster = false, ?int $managedOrganizationId = null): array
     {
         $connection = DB::connection();
         $outermost = $connection->transactionLevel() === 0;
@@ -208,19 +208,18 @@ class OperationsReport
         }
 
         $countDrivers = fn ($status) => $queueRows->filter(fn ($row) => $row['queue']->status === $status)->unique('driver_id')->count();
-        $assignments = collect();
-        if ($includeAssignments) {
+        $roster = collect();
+        if ($includeRoster) {
             if (isset($filters['terminal']) || isset($filters['start_date']) || isset($filters['end_date']) || isset($filters['status'])) {
                 $matchingDrivers = $queueRows->concat($attendanceRows)->concat($tripRows)->pluck('driver_id')->flip();
                 $drivers = $drivers->intersectByKeys($matchingDrivers);
             } elseif (isset($filters['organization_id'])) {
                 $drivers = $drivers->where('organization_id', $filters['organization_id']);
             }
-            $assignments = $drivers->map(fn (Driver $driver) => [
+            $roster = $drivers->map(fn (Driver $driver) => [
                 'driver_id' => $driver->id,
                 'driver' => $driver->name,
                 'organization' => $organizations[$driver->organization_id] ?? self::UNKNOWN,
-                'assigned_terminal' => $driver->assigned_terminal,
             ]);
         }
 
@@ -238,7 +237,7 @@ class OperationsReport
             'queue' => $this->latestFirst($queueRows),
             'trips' => $tripRows->sortByDesc(fn ($row) => $row['trip']->departure_time)->values(),
             'records' => $this->latestFirst($queueRows->concat($standaloneRows)),
-            'assignments' => $assignments,
+            'roster' => $roster,
         ];
     }
 

@@ -10,9 +10,11 @@ use App\Models\TodaOrganization;
 use App\Models\User;
 use App\Models\Vehicle;
 use App\Services\ManagerDriverAccountService;
+use App\Services\OperationsReportPdf;
 use App\Services\PhilippineDay;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\Response;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
@@ -256,108 +258,36 @@ class ManagerPortalController extends Controller
                 $query->where(fn ($q) => $q->where('explanation', 'like', $term)
                     ->orWhereHas('driver', fn ($driver) => $driver->where('name', 'like', $term)));
             })->latest('id')->paginate(15)->withQueryString();
-        $drivers = Driver::query()->where('organization_id', $organization->id);
-        $vehicles = Vehicle::query()->where('organization_id', $organization->id);
-        $logs = DriverLog::query()->whereHas('driver', fn ($query) => $query->where('organization_id', $organization->id));
 
         return view('managers.portal.reports', [
             'organization' => $organization,
             'reports' => $reports,
-            'totalDrivers' => (clone $drivers)->count(),
-            'activeDrivers' => (clone $drivers)->where('status', 'Active')->count(),
-            'totalVehicles' => (clone $vehicles)->count(),
-            'todayEntries' => (clone $logs)->where('attendance_type', 'ENTRY')->whereDate('scanned_at', today())->count(),
-            'todayExits' => (clone $logs)->where('attendance_type', 'EXIT')->whereDate('scanned_at', today())->count(),
-        ]);
+        ] + $this->organizationReportSummary($organization));
     }
 
-    public function exportReports(Request $request)
+    public function exportReports(Request $request, OperationsReportPdf $pdf): Response
     {
         $organization = $this->assignedOrganization($request->user());
+        [, , $date] = PhilippineDay::bounds();
+        $organizationLogs = fn ($query) => $query->where('organization_id', $organization->id);
         $drivers = Driver::query()
             ->where('organization_id', $organization->id)
             ->withCount([
-                'logs as total_entries' => fn ($query) => $query->where('attendance_type', 'ENTRY'),
-                'logs as total_exits' => fn ($query) => $query->where('attendance_type', 'EXIT'),
+                'logs as total_entries' => fn ($query) => $organizationLogs($query)->where('attendance_type', 'ENTRY'),
+                'logs as total_exits' => fn ($query) => $organizationLogs($query)->where('attendance_type', 'EXIT'),
             ])
-            ->withMax('logs', 'scanned_at')
+            ->withMax(['logs as last_scan_at' => $organizationLogs], 'scanned_at')
+            ->withCasts(['last_scan_at' => 'datetime'])
             ->orderBy('name')
+            ->orderBy('id')
             ->get();
-        $logs = DriverLog::query()->whereHas('driver', fn ($query) => $query->where('organization_id', $organization->id));
-        $summary = [
-            'total_drivers' => Driver::query()->where('organization_id', $organization->id)->count(),
-            'active_drivers' => Driver::query()->where('organization_id', $organization->id)->where('status', 'Active')->count(),
-            'total_vehicles' => Vehicle::query()->where('organization_id', $organization->id)->count(),
-            'today_entries' => (clone $logs)->where('attendance_type', 'ENTRY')->whereDate('scanned_at', today())->count(),
-            'today_exits' => (clone $logs)->where('attendance_type', 'EXIT')->whereDate('scanned_at', today())->count(),
-        ];
+        $bytes = $pdf->renderOrganization($organization->name, $date, $this->organizationReportSummary($organization, $date), $drivers);
+        $filename = 'organization-report-'.$organization->id.'-'.$date.'.pdf';
 
-        return response()->streamDownload(function () use ($organization, $drivers, $summary): void {
-            $handle = fopen('php://output', 'w');
-            fputcsv($handle, [
-                'Report Date',
-                'Organization',
-                'Total Drivers',
-                'Active Drivers',
-                'Total Vehicles',
-                'Entries Today',
-                'Exits Today',
-                'Driver ID',
-                'Driver Name',
-                'License Number',
-                'Contact Number',
-                'Plate Number',
-                'Driver Status',
-                'Total Entries',
-                'Total Exits',
-                'Last Scan At',
-            ]);
-
-            if ($drivers->isEmpty()) {
-                fputcsv($handle, [
-                    now()->toDateString(),
-                    $this->csvValue($organization->name),
-                    $summary['total_drivers'],
-                    $summary['active_drivers'],
-                    $summary['total_vehicles'],
-                    $summary['today_entries'],
-                    $summary['today_exits'],
-                    '',
-                    '',
-                    '',
-                    '',
-                    '',
-                    '',
-                    '',
-                    '',
-                    '',
-                ]);
-            }
-
-            foreach ($drivers as $driver) {
-                fputcsv($handle, [
-                    now()->toDateString(),
-                    $this->csvValue($organization->name),
-                    $summary['total_drivers'],
-                    $summary['active_drivers'],
-                    $summary['total_vehicles'],
-                    $summary['today_entries'],
-                    $summary['today_exits'],
-                    $driver->id,
-                    $this->csvValue($driver->name),
-                    $this->csvValue($driver->license_number),
-                    $this->csvValue($driver->contact_number),
-                    $this->csvValue($driver->vehicle_number),
-                    $this->csvValue($driver->status),
-                    $driver->total_entries,
-                    $driver->total_exits,
-                    optional($driver->logs_max_scanned_at)->format('Y-m-d H:i:s'),
-                ]);
-            }
-
-            fclose($handle);
-        }, 'organization-report-'.$organization->id.'-'.now()->format('Y-m-d').'.csv', [
-            'Content-Type' => 'text/csv; charset=UTF-8',
+        return response($bytes, 200, [
+            'Content-Type' => 'application/pdf',
+            'Content-Disposition' => 'attachment; filename="'.$filename.'"',
+            'Cache-Control' => 'private, no-store',
         ]);
     }
 
@@ -410,6 +340,23 @@ class ManagerPortalController extends Controller
         return redirect()->route('manager.profile')->with('status', 'Profile updated.');
     }
 
+    private function organizationReportSummary(TodaOrganization $organization, ?string $date = null): array
+    {
+        [$start, $end] = PhilippineDay::bounds($date);
+        $drivers = Driver::where('organization_id', $organization->id);
+        $logs = DriverLog::where('organization_id', $organization->id)
+            ->whereHas('driver', fn ($query) => $query->where('organization_id', $organization->id))
+            ->recordedBetween($start, $end);
+
+        return [
+            'totalDrivers' => (clone $drivers)->count(),
+            'activeDrivers' => $drivers->where('status', 'Active')->count(),
+            'totalVehicles' => Vehicle::where('organization_id', $organization->id)->count(),
+            'todayEntries' => (clone $logs)->where('attendance_type', 'ENTRY')->count(),
+            'todayExits' => $logs->where('attendance_type', 'EXIT')->count(),
+        ];
+    }
+
     private function assignedOrganization(User $manager): TodaOrganization
     {
         return TodaOrganization::query()
@@ -435,12 +382,5 @@ class ManagerPortalController extends Controller
             $attributes['middle_name'] ?? null,
             $attributes['last_name'],
         ])));
-    }
-
-    private function csvValue(?string $value): string
-    {
-        $value = $value ?? '';
-
-        return preg_match('/^[=+\-@\t\r]/', $value) === 1 ? "'".$value : $value;
     }
 }

@@ -4,10 +4,12 @@ namespace Tests\Feature;
 
 use App\Mail\DriverAccountCreatedMail;
 use App\Models\Driver;
+use App\Models\DriverLog;
 use App\Models\TodaOrganization;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\View;
 use Tests\TestCase;
 
 class ManagerPortalPagesTest extends TestCase
@@ -88,8 +90,9 @@ class ManagerPortalPagesTest extends TestCase
         Mail::assertSent(DriverAccountCreatedMail::class, fn (DriverAccountCreatedMail $mail) => $mail->driver->is($driver));
     }
 
-    public function test_manager_can_download_csv_report_for_only_their_organization(): void
+    public function test_manager_can_download_pdf_report_for_only_their_organization(): void
     {
+        $this->travelTo(now('UTC')->setDate(2026, 11, 18)->setTime(16, 35));
         $organization = TodaOrganization::create([
             'name' => 'North TODA',
             'barangay_travel_area' => 'North Area',
@@ -106,35 +109,53 @@ class ManagerPortalPagesTest extends TestCase
             'organization_id' => $organization->id,
             'must_change_password' => false,
         ]);
-        Driver::create([
+        $driver = Driver::create([
             'name' => 'North Driver',
-            'license_number' => 'LIC-CSV-NORTH',
+            'license_number' => 'LIC-PDF-NORTH',
             'contact_number' => '09170000001',
-            'vehicle_number' => 'NORTH-CSV',
+            'vehicle_number' => 'NORTH-PDF',
             'organization_id' => $organization->id,
             'status' => 'Active',
         ]);
         Driver::create([
             'name' => 'South Driver Secret',
-            'license_number' => 'LIC-CSV-SOUTH',
+            'license_number' => 'LIC-PDF-SOUTH',
             'contact_number' => '09170000002',
-            'vehicle_number' => 'SOUTH-CSV',
+            'vehicle_number' => 'SOUTH-PDF',
             'organization_id' => $otherOrganization->id,
             'status' => 'Active',
         ]);
 
+        $driver->update(['organization_id' => $otherOrganization->id]);
+        DriverLog::create(['driver_id' => $driver->id, 'attendance_type' => 'EXIT', 'terminal_id' => 'Private Terminal',
+            'scanned_at' => now()]);
+        $driver->update(['organization_id' => $organization->id]);
+        DriverLog::create(['driver_id' => $driver->id, 'attendance_type' => 'ENTRY', 'terminal_id' => 'North Terminal',
+            'scanned_at' => now()->subMinutes(25)]);
+        DriverLog::create(['driver_id' => $driver->id, 'attendance_type' => 'EXIT', 'scanned_at' => now()->subHour()]);
+
         $this->actingAs($manager)
             ->get(route('manager.reports'))
             ->assertOk()
+            ->assertSee('Download PDF')
             ->assertSee(route('manager.reports.export'));
 
-        $response = $this->actingAs($manager)->get(route('manager.reports.export'));
-        $response->assertOk()->assertDownload('organization-report-'.$organization->id.'-'.now()->format('Y-m-d').'.csv');
-        $csv = $response->streamedContent();
-
-        $this->assertStringContainsString('North TODA', $csv);
-        $this->assertStringContainsString('North Driver', $csv);
-        $this->assertStringNotContainsString('South Driver Secret', $csv);
-        $this->assertStringNotContainsString('South TODA', $csv);
+        $checked = false;
+        View::composer('reports.operations-pdf', function ($view) use (&$checked): void {
+            $data = $view->getData();
+            $this->assertSame('North TODA', $data['organization']);
+            $this->assertSame([1, 1, 0, 1, 0], $data['sections'][0]['rows']->sole());
+            $row = $data['sections'][1]['rows']->sole();
+            $this->assertSame('North Driver', $row[0][0]);
+            $this->assertSame(['Entries' => 1, 'Exits' => 1], $row[5]);
+            $this->assertSame('19 Nov 2026, 00:10:00', $row[6]);
+            $this->assertStringNotContainsString('Terminal', json_encode($data['sections']));
+            $checked = true;
+        });
+        $response = $this->get(route('manager.reports.export', ['organization_id' => $otherOrganization->id]));
+        $response->assertOk()->assertDownload('organization-report-'.$organization->id.'-2026-11-19.pdf')
+            ->assertHeader('Content-Type', 'application/pdf');
+        $this->assertStringStartsWith('%PDF-', $response->getContent());
+        $this->assertTrue($checked);
     }
 }

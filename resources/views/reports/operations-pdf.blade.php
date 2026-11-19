@@ -30,8 +30,11 @@
         <p class="brand">SCANTRACK / SCFTODA</p>
         <p class="federation">Surigao City Federation of Tricycle Operators and Drivers Association</p>
         <h1>{{ $title }}</h1>
+        @if ($organization)
+            <p class="metadata"><strong>TODA</strong> {{ $organization }}</p>
+        @endif
         <p class="metadata"><strong>Reporting period</strong> {{ $period }} · Philippine Standard Time (Asia/Manila)</p>
-        <p class="metadata"><strong>Generated</strong> {{ $generatedAt }} · Assigned terminals reflect current driver assignments.</p>
+        <p class="metadata"><strong>Generated</strong> {{ $generatedAt }}</p>
     </header>
     @foreach ($sections as $section)
         @php

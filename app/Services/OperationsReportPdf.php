@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\Driver;
 use Carbon\CarbonInterface;
 use Dompdf\Dompdf;
 use Illuminate\Support\Collection;
@@ -19,10 +20,52 @@ class OperationsReportPdf
                 $this->attendance($snapshot['attendance']),
                 $this->queue($snapshot['queue']),
                 $this->trips($snapshot['trips']),
-                $this->assignments($snapshot['assignments']),
+                $this->roster($snapshot['roster']),
             ],
         };
 
+        $title = $type === 'combined'
+            ? 'Driver Entry, Exit and Queue Monitoring Report'
+            : OperationsReport::TYPES[$type];
+
+        return $this->renderDocument($title, $this->period($filters), $sections);
+    }
+
+    public function renderOrganization(string $organization, string $date, array $summary, Collection $drivers): string
+    {
+        $sections = [
+            [
+                'title' => 'Organization summary · '.$date,
+                'headers' => ['Total drivers' => 20, 'Active drivers' => 20, 'Vehicles' => 20, 'Entries today' => 20, 'Exits today' => 20],
+                'rows' => collect([[
+                    $summary['totalDrivers'], $summary['activeDrivers'], $summary['totalVehicles'],
+                    $summary['todayEntries'], $summary['todayExits'],
+                ]]),
+            ],
+            [
+                'title' => 'Driver attendance totals',
+                'headers' => [
+                    'Driver and ID' => 20, 'License number' => 14, 'Contact number' => 14, 'Plate number' => 12,
+                    'Status' => 10, 'All-time attendance' => 14, 'Last scan' => 16,
+                ],
+                'rows' => $drivers->map(fn (Driver $driver) => [
+                    [$driver->name, 'ID' => $driver->id],
+                    $driver->license_number ?? OperationsReport::UNKNOWN,
+                    $driver->contact_number ?? OperationsReport::UNKNOWN,
+                    $driver->vehicle_number ?? OperationsReport::UNKNOWN,
+                    $driver->status,
+                    ['Entries' => $driver->total_entries, 'Exits' => $driver->total_exits],
+                    $this->dateTime($driver->last_scan_at),
+                ]),
+                'empty' => 'No drivers are registered in this TODA.',
+            ],
+        ];
+
+        return $this->renderDocument('Organization Operations Report', $this->period([]), $sections, $organization);
+    }
+
+    private function renderDocument(string $title, string $period, array $sections, ?string $organization = null): string
+    {
         $pdf = new Dompdf([
             'defaultFont' => 'DejaVu Sans',
             'isRemoteEnabled' => false,
@@ -30,10 +73,9 @@ class OperationsReportPdf
             'isJavascriptEnabled' => false,
         ]);
         $pdf->loadHtml(view('reports.operations-pdf', [
-            'title' => $type === 'combined'
-                ? 'Driver Entry, Exit and Queue Monitoring Report'
-                : OperationsReport::TYPES[$type],
-            'period' => $this->period($filters),
+            'title' => $title,
+            'period' => $period,
+            'organization' => $organization,
             'generatedAt' => $this->dateTime(now()),
             'sections' => $sections,
         ])->render(), 'UTF-8');
@@ -68,7 +110,7 @@ class OperationsReportPdf
     {
         return [
             'title' => 'Terminal attendance',
-            'headers' => ['Driver and ID' => 20, 'TODA' => 15, 'Terminals' => 23, 'Entry date and time' => 21, 'Exit date and time' => 21],
+            'headers' => ['Driver and ID' => 28, 'TODA' => 24, 'Entry date and time' => 24, 'Exit date and time' => 24],
             'rows' => $visits->map(fn ($row) => [
                 ...$this->identity($row),
                 $this->dateTime(OperationsReport::scanTime($row['entry'])),
@@ -82,12 +124,11 @@ class OperationsReportPdf
         return [
             'title' => 'Queue sessions',
             'headers' => [
-                'Driver / TODA' => 17, 'Terminals' => 18, 'Attendance' => 16, 'Queue session' => 17,
-                'Waiting time' => 8, 'Trip' => 16, 'Trips completed (all time)' => 8,
+                'Driver / TODA' => 20, 'Attendance' => 19, 'Queue session' => 21,
+                'Waiting time' => 11, 'Trip' => 19, 'Trips completed (all time)' => 10,
             ],
             'rows' => $sessions->map(fn ($row) => [
                 [$row['driver'], 'ID' => $row['driver_id'], $row['organization']],
-                $this->terminals($row),
                 [
                     'Entry' => $this->dateTime(OperationsReport::scanTime($row['entry'])),
                     'Exit' => $this->dateTime(OperationsReport::scanTime($row['exit'])),
@@ -114,8 +155,8 @@ class OperationsReportPdf
         return [
             'title' => 'Recorded trips',
             'headers' => [
-                'Driver and ID' => 14, 'TODA' => 10, 'Terminals' => 16, 'Trip ID and destination' => 18,
-                'Departure' => 14, 'Completion' => 14, 'Trip status' => 7, 'Trips completed (all time)' => 7,
+                'Driver and ID' => 18, 'TODA' => 14, 'Trip ID and destination' => 20,
+                'Departure' => 15, 'Completion' => 15, 'Trip status' => 8, 'Trips completed (all time)' => 10,
             ],
             'rows' => $trips->map(fn ($row) => [
                 ...$this->identity($row),
@@ -167,21 +208,17 @@ class OperationsReportPdf
 
         return [
             'title' => 'Terminal operations timeline',
-            'headers' => ['Driver and ID' => 20, 'TODA' => 15, 'Terminals' => 20, 'Date and time' => 20, 'Activity' => 25],
+            'headers' => ['Driver and ID' => 24, 'TODA' => 20, 'Date and time' => 22, 'Activity' => 34],
             'rows' => $events->sortByDesc(fn ($event) => $event[0])->pluck(1),
         ];
     }
 
-    private function assignments(Collection $drivers): array
+    private function roster(Collection $drivers): array
     {
         return [
-            'title' => 'Current driver terminal assignments',
-            'headers' => ['Driver and ID' => 34, 'Current TODA' => 33, 'Assigned terminal' => 33],
-            'rows' => $drivers->map(fn ($row) => [
-                [$row['driver'], 'ID' => $row['driver_id']],
-                $row['organization'],
-                $row['assigned_terminal'] ?? 'Unassigned',
-            ]),
+            'title' => 'Driver roster',
+            'headers' => ['Driver and ID' => 52, 'Current TODA' => 48],
+            'rows' => $drivers->map(fn ($row) => $this->identity($row)),
             'empty' => 'No drivers match these filters.',
         ];
     }
@@ -191,15 +228,6 @@ class OperationsReportPdf
         return [
             [$row['driver'], 'ID' => $row['driver_id']],
             $row['organization'],
-            $this->terminals($row),
-        ];
-    }
-
-    private function terminals(array $row): array
-    {
-        return [
-            'Assigned' => $row['assigned_terminal'] ?? 'Unassigned',
-            'Recorded' => $row['terminal'] ?? OperationsReport::UNKNOWN,
         ];
     }
 

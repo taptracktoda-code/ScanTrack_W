@@ -5,10 +5,10 @@
         <div>
             <p class="section-kicker mb-2">Organization analytics</p>
             <h1 class="dashboard-page-title mb-2">Reports</h1>
-            <p class="dashboard-page-subtitle mb-0">{{ $organization->name }} · {{ now()->format('F j, Y') }}</p>
+            <p class="dashboard-page-subtitle mb-0">{{ $organization->name }} · {{ now('Asia/Manila')->format('F j, Y') }}</p>
         </div>
         <a class="btn btn-primary" href="{{ route('manager.reports.export') }}">
-            <i class="bi bi-download me-2"></i>Download CSV
+            <i class="bi bi-file-earmark-pdf me-2" aria-hidden="true"></i>Download PDF
         </a>
     </section>
     @if ($errors->any())<div class="alert alert-danger" role="alert">{{ $errors->first() }}</div>@endif

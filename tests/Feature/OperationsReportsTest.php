@@ -101,8 +101,8 @@ class OperationsReportsTest extends TestCase
             $entry = OrganizationQueueEntry::where('driver_id', $driver->id)->sole();
             $entry->update(['status' => 'SERVING', 'served_at' => now()]);
             $row = $view->getData()['sections'][0]['rows']->sole();
-            $this->assertSame('Waiting', $row[3][0]);
-            $this->assertSame(['Assigned' => 'Unassigned', 'Recorded' => 'Snapshot Terminal'], $row[1]);
+            $this->assertSame('Waiting', $row[2][0]);
+            $this->assertStringNotContainsString('Snapshot Terminal', json_encode($row));
             $rendered = true;
         });
 
@@ -135,7 +135,7 @@ class OperationsReportsTest extends TestCase
         $this->assertSame('EXIT', $otherTerminal['attendance']->sole()['exit']->attendance_type);
     }
 
-    public function test_reports_show_current_terminal_assignments_independently_of_scans(): void
+    public function test_web_reports_show_current_terminal_assignments_but_the_pdf_omits_them(): void
     {
         $admin = User::factory()->create(['role' => 'SUPER_ADMIN']);
         [$organization, $manager, $driver, , $qr] = $this->queueFixture('Assigned');
@@ -155,17 +155,16 @@ class OperationsReportsTest extends TestCase
 
         View::composer('reports.operations-pdf', function ($view) use ($driver, $noScans): void {
             $sections = collect($view->getData()['sections'])->keyBy('title');
-            $this->assertSame(
-                ['Assigned' => 'Harbor Terminal', 'Recorded' => 'Market Terminal'],
-                $sections['Queue sessions']['rows']->sole()[1],
-            );
-            $assignments = $sections['Current driver terminal assignments']['rows'];
-            $this->assertSame('Harbor Terminal', $assignments[$driver->id][2]);
-            $this->assertSame('Unassigned', $assignments[$noScans->id][2]);
+            $data = json_encode($sections->all());
+            $this->assertStringNotContainsString('Harbor Terminal', $data);
+            $this->assertStringNotContainsString('Market Terminal', $data);
+            $roster = $sections['Driver roster']['rows'];
+            $this->assertSame($driver->name, $roster[$driver->id][0][0]);
+            $this->assertSame($noScans->name, $roster[$noScans->id][0][0]);
         });
         $this->get(route('reports.export', ['type' => 'combined']))->assertOk()->assertDownload();
-        $filtered = app(OperationsReport::class)->snapshot(['terminal' => 'Market Terminal'], includeAssignments: true);
-        $this->assertSame([$driver->id], $filtered['assignments']->keys()->all());
+        $filtered = app(OperationsReport::class)->snapshot(['terminal' => 'Market Terminal'], includeRoster: true);
+        $this->assertSame([$driver->id], $filtered['roster']->keys()->all());
 
         $this->put(route('drivers.update', $driver), [
             ...$driver->only('name', 'license_number', 'contact_number', 'vehicle_number', 'status'),
