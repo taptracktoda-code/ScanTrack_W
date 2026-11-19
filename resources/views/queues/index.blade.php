@@ -1,65 +1,99 @@
 @extends('layouts.app')
 
+@push('styles')
+    <link href="{{ asset('css/reports.css') }}" rel="stylesheet">
+@endpush
+
 @section('content')
-    <section class="dashboard-hero mb-4">
-        <div>
-            <p class="section-kicker mb-2">Operations monitoring</p>
-            <h2 class="dashboard-page-title mb-2">Queue Monitoring</h2>
-            <p class="dashboard-page-subtitle mb-0">Live organization queue state. Queue controls are available to Managers in the mobile API.</p>
-        </div>
-    </section>
-
-    <section class="card dashboard-card border-0 shadow-sm mb-4">
-        <div class="table-responsive">
-            <table class="table table-hover align-middle mb-0">
-                <thead class="text-uppercase small text-muted">
-                    <tr><th class="ps-4">Organization</th><th>Current Driver</th><th>Queue Number</th><th>Drivers Waiting</th><th>Queue Status</th><th>Last Served</th></tr>
-                </thead>
-                <tbody>
-                    @forelse ($organizations as $queue)
-                        <tr>
-                            <td class="ps-4 fw-semibold">{{ $queue['organization']->name }}</td>
-                            <td>{{ $queue['current']?->driver?->name ?? 'No driver being served' }}</td>
-                            <td>{{ $queue['current']?->queue_number ?? '—' }}</td>
-                            <td><span class="badge text-bg-primary">{{ $queue['waiting'] }}</span></td>
-                            <td><span class="badge {{ $queue['state'] === 'Serving' ? 'text-bg-success' : ($queue['state'] === 'Waiting' ? 'text-bg-warning' : 'text-bg-secondary') }}">{{ $queue['state'] }}</span></td>
-                            <td>
-                                {{ $queue['last_served']?->driver?->name ?? '—' }}
-                                @if ($queue['last_served']?->completed_at)
-                                    <div class="small text-muted">{{ $queue['last_served']->completed_at->diffForHumans() }}</div>
-                                @endif
-                            </td>
-                        </tr>
-                    @empty
-                        <tr><td colspan="6" class="text-center text-muted py-5">No organizations are configured.</td></tr>
-                    @endforelse
-                </tbody>
-            </table>
-        </div>
-    </section>
-
-    <section class="card dashboard-card border-0 shadow-sm">
-        <div class="card-body p-4">
-            <h3 class="section-title mb-3">Recent Queue Activity</h3>
-            <div class="table-responsive">
-                <table class="table table-hover align-middle mb-0">
-                    <thead class="text-uppercase small text-muted"><tr><th>Time</th><th>Activity</th><th>Organization</th><th>Driver</th><th>Manager</th><th>Details</th></tr></thead>
-                    <tbody>
-                        @forelse ($activities as $activity)
-                            <tr>
-                                <td>{{ $activity->created_at?->format('M j, Y H:i') }}</td>
-                                <td class="fw-semibold">{{ $activity->activity }}</td>
-                                <td>{{ $activity->driver?->organization?->name ?? '—' }}</td>
-                                <td>{{ $activity->driver?->name ?? '—' }}</td>
-                                <td>{{ $activity->admin?->name ?? '—' }}</td>
-                                <td>{{ $activity->description ?? '—' }}</td>
-                            </tr>
-                        @empty
-                            <tr><td colspan="6" class="text-center text-muted py-5">No queue activity has been recorded yet.</td></tr>
-                        @endforelse
-                    </tbody>
-                </table>
+    <main class="reports-page">
+        <header class="reports-header">
+            <div>
+                <h1 class="reports-title">Queue Monitoring</h1>
+                <p class="reports-description">Terminal attendance, live queue positions, and recorded trips. All times are in Asia/Manila.</p>
             </div>
+            <a class="btn reports-primary-action" href="{{ route('reports') }}">Back to Reports</a>
+        </header>
+
+        <section class="reports-panel mb-4" aria-label="Queue filters and PDF export">
+            <form method="GET" action="{{ route('queues.monitoring') }}" class="row g-3 align-items-end mb-3">
+                <div class="col-12 col-sm-6 col-xl-4">
+                    <label class="form-label" for="queue-terminal">Terminal</label>
+                    <select class="form-select" id="queue-terminal" name="terminal">
+                        <option value="">All terminals</option>
+                        @foreach ($terminals as $terminal)
+                            <option value="{{ $terminal }}" @selected(($filters['terminal'] ?? null) === $terminal)>{{ $terminal }}</option>
+                        @endforeach
+                    </select>
+                </div>
+                <div class="col-12 col-sm-6 col-xl-4">
+                    <label class="form-label" for="queue-organization">TODA association</label>
+                    <select class="form-select" id="queue-organization" name="organization_id">
+                        <option value="">All TODAs</option>
+                        @foreach ($organizations as $organization)
+                            <option value="{{ $organization->id }}" @selected(($filters['organization_id'] ?? null) == $organization->id)>{{ $organization->name }}</option>
+                        @endforeach
+                    </select>
+                </div>
+                <div class="col-12 col-sm-6 col-xl-4">
+                    <label class="form-label" for="queue-driver">Driver</label>
+                    <select class="form-select" id="queue-driver" name="driver_id">
+                        <option value="">All drivers</option>
+                        @foreach ($drivers as $driver)
+                            <option value="{{ $driver->id }}" @selected(($filters['driver_id'] ?? null) == $driver->id)>{{ $driver->name }} (#{{ $driver->id }})</option>
+                        @endforeach
+                    </select>
+                </div>
+                <div class="col-12 col-sm-6 col-xl-4">
+                    <label class="form-label" for="queue-start">From date</label>
+                    <input class="form-control" type="date" id="queue-start" name="start_date" value="{{ $filters['start_date'] ?? '' }}">
+                </div>
+                <div class="col-12 col-sm-6 col-xl-4">
+                    <label class="form-label" for="queue-end">Through date</label>
+                    <input class="form-control" type="date" id="queue-end" name="end_date" value="{{ $filters['end_date'] ?? '' }}">
+                </div>
+                <div class="col-12 col-sm-6 col-xl-4">
+                    <label class="form-label" for="queue-status">Queue status</label>
+                    <select class="form-select" id="queue-status" name="status">
+                        <option value="">All statuses</option>
+                        @foreach ($statuses as $value => $label)
+                            <option value="{{ $value }}" @selected(($filters['status'] ?? null) === $value)>{{ $label }}</option>
+                        @endforeach
+                    </select>
+                </div>
+                @if ($errors->any())
+                    <div class="col-12 text-danger" role="alert">{{ $errors->first() }}</div>
+                @endif
+                <div class="col-12 d-flex gap-2">
+                    <button class="btn btn-primary" type="submit">Apply filters</button>
+                    <a class="btn btn-outline-secondary" href="{{ route('queues.monitoring') }}">Clear</a>
+                </div>
+            </form>
+
+            <form method="GET" action="{{ route('reports.export') }}" class="row g-2 align-items-end">
+                @foreach ($filters as $key => $value)
+                    <input type="hidden" name="{{ $key }}" value="{{ $value }}">
+                @endforeach
+                <div class="col-12 col-md-auto">
+                    <label class="form-label" for="queue-report-type">PDF report</label>
+                    <select class="form-select" id="queue-report-type" name="type">
+                        @foreach ($reportTypes as $type => $title)
+                            <option value="{{ $type }}" @selected($type === 'combined')>{{ $title }}</option>
+                        @endforeach
+                    </select>
+                </div>
+                <div class="col-auto">
+                    <button class="btn btn-outline-primary" type="submit">Download PDF</button>
+                </div>
+            </form>
+        </section>
+
+        <p id="queue-refresh-status" class="small text-muted" role="status">Refreshes automatically every 20 seconds while this tab is visible.</p>
+        <div id="queue-live-records" data-feed="{{ route('queues.feed', $filters + ['page' => $records->currentPage()]) }}">
+            @include('queues.records')
         </div>
-    </section>
+    </main>
 @endsection
+
+@push('scripts')
+    <script src="{{ asset('js/queue-monitoring.js') }}" defer></script>
+@endpush

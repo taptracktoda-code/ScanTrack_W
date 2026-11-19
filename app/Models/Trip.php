@@ -9,6 +9,8 @@ class Trip extends Model
     protected $fillable = [
         'trip_id',
         'driver_id',
+        'organization_id',
+        'queue_entry_id',
         'destination_id',
         'destination',
         'passenger_count',

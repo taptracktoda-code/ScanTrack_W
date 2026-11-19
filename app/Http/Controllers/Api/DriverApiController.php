@@ -344,11 +344,13 @@ class DriverApiController extends Controller
             if ($latestScan?->attendance_type !== 'ENTRY' || $latestScan?->scan_method !== 'QR') {
                 throw ValidationException::withMessages(['qr_scan' => ['A current manager QR entry scan is required.']]);
             }
-            $entry->update(['status' => 'SERVING', 'served_at' => now()]);
+            $entry->update(['status' => 'SERVING', 'served_at' => $entry->served_at ?? now()]);
 
             return Trip::create([
                 'trip_id' => 'TRIP-'.strtoupper((string) Str::ulid()),
                 'driver_id' => $driver->id,
+                'organization_id' => $entry->organization_id,
+                'queue_entry_id' => $entry->id,
                 'destination_id' => $destination->id,
                 'destination' => $destination->name,
                 'passenger_count' => $attributes['passenger_count'],

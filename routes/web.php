@@ -70,6 +70,7 @@ Route::middleware(['auth', 'admin'])->group(function () {
         Route::post('/drivers/{driver}/reject', [DriverVerificationController::class, 'reject'])->name('drivers.reject');
         Route::get('/managers', [ManagerController::class, 'index'])->name('managers');
         Route::get('/queues', [QueueMonitoringController::class, 'index'])->name('queues.monitoring');
+        Route::get('/queues/feed', [QueueMonitoringController::class, 'feed'])->name('queues.feed');
         Route::post('/managers', [ManagerController::class, 'store'])->name('managers.store');
         Route::put('/managers/{manager}', [ManagerController::class, 'update'])->name('managers.update');
         Route::delete('/managers/{manager}', [ManagerController::class, 'destroy'])->name('managers.destroy');

@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\QrScanRequest;
 use App\Models\Driver;
+use App\Models\DriverLog;
 use App\Models\OrganizationDestination;
 use App\Models\OrganizationEvent;
 use App\Models\OrganizationQueueEntry;
@@ -497,9 +498,12 @@ class ManagerApiController extends Controller
             }
 
             $queueNumber = (int) OrganizationQueueEntry::where('organization_id', $organization->id)->max('queue_number') + 1;
+            $latestScan = DriverLog::where('driver_id', $driver->id)->latest('created_at')->latest('id')->first();
             $entry = OrganizationQueueEntry::create([
                 'organization_id' => $organization->id,
                 'driver_id' => $driver->id,
+                'entry_log_id' => $latestScan?->attendance_type === 'ENTRY'
+                    && (int) $latestScan->organization_id === (int) $organization->id ? $latestScan->id : null,
                 'queue_number' => $queueNumber,
                 'status' => 'WAITING',
                 'queued_by' => $request->user()->id,

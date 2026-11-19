@@ -94,28 +94,38 @@ class QrScanService
             if ($managerScan && $transactionType === 'EXIT' && $latestLog?->attendance_type !== 'ENTRY') {
                 return ['failure' => 'Record a terminal entry before recording an exit.'];
             }
-            if ($managerScan && $transactionType === 'ENTRY') {
-                $number = (int) OrganizationQueueEntry::where('organization_id', $driver->organization_id)->max('queue_number') + 1;
-                OrganizationQueueEntry::create([
-                    'organization_id' => $driver->organization_id,
-                    'driver_id' => $driver->id,
-                    'queue_number' => $number,
-                    'status' => 'WAITING',
-                    'queued_by' => $data['admin_id'] ?? null,
-                ]);
-            } elseif ($managerScan && $activeEntry) {
-                $activeEntry->update(['status' => 'CANCELLED', 'completed_at' => now()]);
-            }
             $timestamp = now();
+            $organizationId = $data['organization_id'] ?? $driver->organization_id;
+            $terminal = $data['terminal_id'] ?? null;
+            $entryLog = $transactionType === 'EXIT' && $latestLog?->attendance_type === 'ENTRY'
+                && ($latestLog->organization_id === null || (int) $latestLog->organization_id === (int) $organizationId)
+                && ($terminal === null || $latestLog->terminal_id === $terminal)
+                ? $latestLog : null;
             $log = DriverLog::create([
                 'driver_id' => $driver->id,
+                'organization_id' => $organizationId,
+                'entry_log_id' => $entryLog?->id,
                 'attendance_type' => $transactionType,
-                'terminal_id' => $data['terminal_id'] ?? null,
+                'terminal_id' => $terminal ?? $entryLog?->terminal_id,
                 'scanned_at' => $timestamp,
                 'scan_method' => 'QR',
                 'created_at' => $timestamp,
                 'updated_at' => $timestamp,
             ]);
+
+            if ($managerScan && $transactionType === 'ENTRY') {
+                $number = (int) OrganizationQueueEntry::where('organization_id', $driver->organization_id)->max('queue_number') + 1;
+                OrganizationQueueEntry::create([
+                    'organization_id' => $driver->organization_id,
+                    'driver_id' => $driver->id,
+                    'entry_log_id' => $log->id,
+                    'queue_number' => $number,
+                    'status' => 'WAITING',
+                    'queued_by' => $data['admin_id'] ?? null,
+                ]);
+            } elseif ($managerScan && $activeEntry) {
+                $activeEntry->update(['status' => 'CANCELLED', 'completed_at' => $timestamp]);
+            }
 
             TerminalActivity::create([
                 'admin_id' => $data['admin_id'] ?? null,

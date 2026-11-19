@@ -54,12 +54,13 @@ class QueueManagementTest extends TestCase
         $admin = User::factory()->create(['role' => 'SUPER_ADMIN']);
         $this->actingAs($admin)->get(route('queues.monitoring'))
             ->assertOk()
-            ->assertViewHas('organizations', function ($queues): bool {
-                return $queues->first()['waiting'] === 1
-                    && $queues->first()['current'] === null
-                    && $queues->first()['last_served']?->driver?->name === 'North Driver One';
+            ->assertViewHas('summary', function ($summary): bool {
+                return $summary['Total Drivers Waiting'] === 1
+                    && $summary['Total Drivers On Trip'] === 0
+                    && $summary['Total Completed Trips'] === 0;
             })
-            ->assertSee('North Driver One');
+            ->assertSee('North Driver One')
+            ->assertSee('No Trip Recorded');
     }
 
     public function test_manager_cannot_queue_a_driver_from_another_organization(): void

@@ -22,11 +22,11 @@
             <div>
                 <p class="reports-eyebrow">SCANTRACK / OPERATIONS</p>
                 <h1 class="reports-title">Reports</h1>
-                <p class="reports-description">Driver records, registrations, and terminal attendance exports.</p>
+                <p class="reports-description">Driver registrations, terminal attendance, queue sessions, and trip history.</p>
             </div>
-            <a class="btn reports-primary-action" href="{{ route('reports.export', ['type' => 'driver-summary']) }}">
-                <i class="bi bi-download" aria-hidden="true"></i>
-                <span>Export driver summary</span>
+            <a class="btn reports-primary-action" href="{{ route('queues.monitoring') }}">
+                <i class="bi bi-list-ol" aria-hidden="true"></i>
+                <span>Queue Monitoring</span>
             </a>
         </header>
 
@@ -86,18 +86,18 @@
                 <div class="reports-panel-heading">
                     <div>
                         <h2>Available exports</h2>
-                        <p>Download current records as CSV files</p>
+                        <p>Download PDF reports or apply filters in Queue Monitoring.</p>
                     </div>
                 </div>
                 <div class="reports-export-list">
-                    @foreach ($summaryReports as $report)
+                    @foreach ($reportTypes as $type => $title)
                         <div class="reports-export-row">
-                            <span class="reports-export-icon"><i class="bi bi-file-earmark-spreadsheet" aria-hidden="true"></i></span>
+                            <span class="reports-export-icon"><i class="bi bi-file-earmark-pdf" aria-hidden="true"></i></span>
                             <div class="reports-export-copy">
-                                <strong>{{ $report['title'] }}</strong>
-                                <span>{{ number_format($report['count']) }} records · {{ $report['type'] }}</span>
+                                <strong>{{ $title }}</strong>
+                                <span>PDF</span>
                             </div>
-                            <a class="btn reports-download-action" href="{{ route('reports.export', ['type' => $report['export_type']]) }}" aria-label="Download {{ $report['title'] }}">
+                            <a class="btn reports-download-action" href="{{ route('reports.export', ['type' => $type]) }}" aria-label="Download {{ $title }}">
                                 <i class="bi bi-download" aria-hidden="true"></i>
                             </a>
                         </div>
@@ -110,7 +110,7 @@
             <div class="reports-table-heading">
                 <div>
                     <h2>Driver records</h2>
-                    <p>Current driver details included in the summary export.</p>
+                    <p>Current driver registration details.</p>
                 </div>
                 <span class="reports-record-count"><i class="bi bi-people" aria-hidden="true"></i>{{ number_format($drivers->count()) }} drivers</span>
             </div>

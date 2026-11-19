@@ -4,14 +4,15 @@ namespace App\Http\Controllers;
 
 use App\Models\Driver;
 use App\Models\DriverLog;
-use App\Models\OrganizationQueueEntry;
 use App\Models\TerminalActivity;
 use App\Models\TodaOrganization;
-use App\Models\Vehicle;
+use App\Services\OperationsReport;
+use App\Services\OperationsReportPdf;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\Response;
 use Illuminate\Support\Collection;
-use Symfony\Component\HttpFoundation\StreamedResponse;
+use Illuminate\Validation\Rule;
 use Illuminate\View\View;
 
 class ReportController extends Controller
@@ -19,49 +20,28 @@ class ReportController extends Controller
     public function index(): View
     {
         $drivers = Driver::with('organization')->latest()->get();
-        $driverLogs = DriverLog::with('driver.organization')->latest()->get();
+        $driverLogCount = DriverLog::count();
         $monthlyPerformance = $this->monthlyDriverPerformance($drivers);
 
         return view('reports.index', [
             'drivers' => $drivers,
-            'driverLogs' => $driverLogs,
             'monthlyPerformance' => $monthlyPerformance,
-            'reportCards' => $this->reportCards($drivers, $driverLogs),
-            'summaryReports' => $this->summaryReports($drivers, $driverLogs),
+            'reportCards' => $this->reportCards($drivers, $driverLogCount),
+            'reportTypes' => OperationsReport::TYPES,
         ]);
     }
 
-    public function export(Request $request): StreamedResponse
+    public function export(Request $request, OperationsReport $reports, OperationsReportPdf $pdf): Response
     {
-        $type = $request->query('type', 'driver-summary');
-        $types = ['driver-summary', 'driver-activity', 'driver-verification', 'vehicle-register', 'organization-activity', 'terminal-activity', 'queue-activity'];
-        $type = in_array($type, $types, true) ? $type : 'driver-summary';
-        $fileName = $type . '-' . now()->format('Y-m-d') . '.csv';
+        $filters = $reports->filters($request);
+        $type = $request->validate(['type' => ['sometimes', Rule::in(array_keys(OperationsReport::TYPES))]])['type'] ?? 'combined';
+        $bytes = $pdf->render($type, $filters, $reports->snapshot($filters));
+        $filename = $type.'-'.now(OperationsReport::ZONE)->toDateString().'.pdf';
 
-        return response()->streamDownload(function () use ($type) {
-            $handle = fopen('php://output', 'w');
-
-            if ($type === 'driver-activity') {
-                $this->writeDriverActivityCsv($handle);
-            } elseif ($type === 'driver-verification') {
-                $this->writeDriverVerificationCsv($handle);
-            } elseif ($type === 'vehicle-register') {
-                $this->writeVehicleCsv($handle);
-            } elseif ($type === 'organization-activity') {
-                $this->writeOrganizationCsv($handle);
-            } elseif ($type === 'terminal-activity') {
-                $this->writeTerminalActivityCsv($handle);
-            } elseif ($type === 'queue-activity') {
-                $this->writeQueueActivityCsv($handle);
-            } else {
-                $this->writeDriverSummaryCsv($handle);
-            }
-
-            if (is_resource($handle)) {
-                fclose($handle);
-            }
-        }, $fileName, [
-            'Content-Type' => 'text/csv',
+        return response($bytes, 200, [
+            'Content-Type' => 'application/pdf',
+            'Content-Disposition' => 'attachment; filename="'.$filename.'"',
+            'Cache-Control' => 'private, no-store',
         ]);
     }
 
@@ -148,7 +128,7 @@ class ReportController extends Controller
         ]);
     }
 
-    private function reportCards(Collection $drivers, Collection $driverLogs): array
+    private function reportCards(Collection $drivers, int $driverLogCount): array
     {
         $activeDrivers = $drivers->where('status', 'Active')->count();
         $assignedDrivers = $drivers->whereNotNull('vehicle_number')->filter(fn ($driver) => filled($driver->vehicle_number))->count();
@@ -168,55 +148,7 @@ class ReportController extends Controller
             [
                 'label' => 'Assigned Vehicles',
                 'value' => number_format($assignedDrivers),
-                'trend' => $driverLogs->count() . ' driver log records',
-            ],
-        ];
-    }
-
-    private function summaryReports(Collection $drivers, Collection $driverLogs): array
-    {
-        return [
-            [
-                'title' => 'Driver Summary Report - ' . now()->format('F j, Y'),
-                'type' => 'CSV',
-                'export_type' => 'driver-summary',
-                'count' => $drivers->count(),
-            ],
-            [
-                'title' => 'QR Scan and Attendance Report - ' . now()->format('F j, Y'),
-                'type' => 'CSV',
-                'export_type' => 'driver-activity',
-                'count' => $driverLogs->count(),
-            ],
-            [
-                'title' => 'Driver Verification Report - ' . now()->format('F j, Y'),
-                'type' => 'CSV',
-                'export_type' => 'driver-verification',
-                'count' => Driver::whereIn('status', ['Pending', 'Active', 'Rejected', 'Inactive'])->count(),
-            ],
-            [
-                'title' => 'Vehicle Register - ' . now()->format('F j, Y'),
-                'type' => 'CSV',
-                'export_type' => 'vehicle-register',
-                'count' => Vehicle::count(),
-            ],
-            [
-                'title' => 'Organization Activity - ' . now()->format('F j, Y'),
-                'type' => 'CSV',
-                'export_type' => 'organization-activity',
-                'count' => TodaOrganization::count(),
-            ],
-            [
-                'title' => 'Terminal Activity - ' . now()->format('F j, Y'),
-                'type' => 'CSV',
-                'export_type' => 'terminal-activity',
-                'count' => TerminalActivity::count(),
-            ],
-            [
-                'title' => 'Queue Activity - ' . now()->format('F j, Y'),
-                'type' => 'CSV',
-                'export_type' => 'queue-activity',
-                'count' => OrganizationQueueEntry::count(),
+                'trend' => $driverLogCount . ' driver log records',
             ],
         ];
     }
@@ -253,147 +185,5 @@ class ReportController extends Controller
         $growth = round((($thisMonth - $lastMonth) / $lastMonth) * 100, 1);
 
         return ($growth >= 0 ? '+' : '') . $growth . '% from last month';
-    }
-
-    private function writeDriverSummaryCsv($handle): void
-    {
-        fputcsv($handle, ['Driver name', 'License No.', 'Contact', 'Vehicle No.', 'Organization', 'Status', 'Created At', 'Updated At']);
-
-        Driver::latest()->chunk(100, function ($drivers) use ($handle) {
-            foreach ($drivers as $driver) {
-                fputcsv($handle, [
-                    $driver->name,
-                    $driver->license_number,
-                    $driver->contact_number,
-                    $driver->vehicle_number ?: 'Unassigned',
-                    $driver->organization?->name ?: 'Not assigned',
-                    $driver->status,
-                    optional($driver->created_at)->format('Y-m-d H:i:s'),
-                    optional($driver->updated_at)->format('Y-m-d H:i:s'),
-                ]);
-            }
-        });
-    }
-
-    private function writeDriverActivityCsv($handle): void
-    {
-        fputcsv($handle, ['Log ID', 'Driver', 'Vehicle No.', 'Organization', 'Scan Type', 'Scan Method', 'Terminal', 'Scanned At']);
-
-        DriverLog::latest()->chunk(100, function ($logs) use ($handle) {
-            foreach ($logs as $log) {
-                fputcsv($handle, [
-                    $log->id,
-                    $log->driver?->name ?: 'Unknown driver',
-                    $log->driver?->vehicle_number ?: 'Unassigned',
-                    $log->driver?->organization?->name ?: 'Not assigned',
-                    $log->attendance_type ?: 'UNKNOWN',
-                    $log->scan_method ?: 'Recorded',
-                    $log->terminal_id ?: 'N/A',
-                    optional($log->scanned_at ?: $log->created_at)->format('Y-m-d H:i:s'),
-                ]);
-            }
-        });
-    }
-
-    private function writeDriverVerificationCsv($handle): void
-    {
-        fputcsv($handle, ['Driver', 'Organization', 'Status', 'Registration Date', 'Approved At', 'Approved By', 'Rejected At', 'Rejected By', 'Rejection Reason']);
-
-        Driver::with(['organization', 'approver', 'rejector'])->latest()->chunk(100, function ($drivers) use ($handle): void {
-            foreach ($drivers as $driver) {
-                fputcsv($handle, [
-                    $driver->name,
-                    $driver->organization?->name,
-                    $driver->status,
-                    optional($driver->created_at)->format('Y-m-d H:i:s'),
-                    optional($driver->approved_at)->format('Y-m-d H:i:s'),
-                    $driver->approver?->name,
-                    optional($driver->rejected_at)->format('Y-m-d H:i:s'),
-                    $driver->rejector?->name,
-                    $driver->rejection_reason,
-                ]);
-            }
-        });
-    }
-
-    private function writeVehicleCsv($handle): void
-    {
-        fputcsv($handle, ['Vehicle ID', 'Plate Number', 'Driver', 'Organization', 'Type', 'Model', 'Status', 'Registration Date']);
-
-        Vehicle::with(['driver', 'organization'])->latest()->chunk(100, function ($vehicles) use ($handle): void {
-            foreach ($vehicles as $vehicle) {
-                fputcsv($handle, [
-                    $vehicle->id,
-                    $vehicle->plate_number,
-                    $vehicle->driver?->name,
-                    $vehicle->organization?->name,
-                    $vehicle->vehicle_type,
-                    $vehicle->name,
-                    $vehicle->status,
-                    optional($vehicle->created_at)->format('Y-m-d H:i:s'),
-                ]);
-            }
-        });
-    }
-
-    private function writeOrganizationCsv($handle): void
-    {
-        fputcsv($handle, ['Organization', 'Address', 'Contact Number', 'Email', 'Status', 'Managers', 'Drivers', 'Vehicles', 'Created At']);
-
-        TodaOrganization::withCount(['managers', 'drivers', 'vehicles'])->latest()->chunk(100, function ($organizations) use ($handle): void {
-            foreach ($organizations as $organization) {
-                fputcsv($handle, [
-                    $organization->name,
-                    $organization->address,
-                    $organization->contact_number,
-                    $organization->email,
-                    $organization->status,
-                    $organization->managers_count,
-                    $organization->drivers_count,
-                    $organization->vehicles_count,
-                    optional($organization->created_at)->format('Y-m-d H:i:s'),
-                ]);
-            }
-        });
-    }
-
-    private function writeTerminalActivityCsv($handle): void
-    {
-        fputcsv($handle, ['Activity ID', 'Activity', 'Actor', 'Driver', 'Organization', 'Details', 'Recorded At']);
-
-        TerminalActivity::with(['admin', 'driver.organization'])->latest()->chunk(100, function ($activities) use ($handle): void {
-            foreach ($activities as $activity) {
-                fputcsv($handle, [
-                    $activity->id,
-                    $activity->activity,
-                    $activity->admin?->name,
-                    $activity->driver?->name,
-                    $activity->driver?->organization?->name,
-                    $activity->description,
-                    optional($activity->created_at)->format('Y-m-d H:i:s'),
-                ]);
-            }
-        });
-    }
-
-    private function writeQueueActivityCsv($handle): void
-    {
-        fputcsv($handle, ['Queue ID', 'Organization', 'Queue Number', 'Driver', 'Status', 'Queued By', 'Served By', 'Served At', 'Completed At']);
-
-        OrganizationQueueEntry::with(['organization', 'driver', 'manager', 'server'])->latest()->chunk(100, function ($entries) use ($handle): void {
-            foreach ($entries as $entry) {
-                fputcsv($handle, [
-                    $entry->id,
-                    $entry->organization?->name,
-                    $entry->queue_number,
-                    $entry->driver?->name,
-                    $entry->status,
-                    $entry->manager?->name,
-                    $entry->server?->name,
-                    optional($entry->served_at)->format('Y-m-d H:i:s'),
-                    optional($entry->completed_at)->format('Y-m-d H:i:s'),
-                ]);
-            }
-        });
     }
 }

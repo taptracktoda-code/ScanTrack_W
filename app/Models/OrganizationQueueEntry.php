@@ -9,6 +9,7 @@ class OrganizationQueueEntry extends Model
     protected $fillable = [
         'organization_id',
         'driver_id',
+        'entry_log_id',
         'queue_number',
         'status',
         'queued_by',
@@ -31,6 +32,11 @@ class OrganizationQueueEntry extends Model
     public function driver()
     {
         return $this->belongsTo(Driver::class);
+    }
+
+    public function entryLog()
+    {
+        return $this->belongsTo(DriverLog::class, 'entry_log_id');
     }
 
     public function manager()

@@ -6,6 +6,7 @@ use App\Models\Driver;
 use App\Models\DriverLog;
 use App\Models\TodaOrganization;
 use App\Models\User;
+use App\Services\OperationsReport;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -31,7 +32,8 @@ class ReportsTest extends TestCase
             ->assertSee('Driver registrations')
             ->assertSee('Available exports')
             ->assertSee('Maria Santos')
-            ->assertSee('QR Scan and Attendance Report');
+            ->assertSee('Driver Entry and Exit Report')
+            ->assertSee('Queue Monitoring');
     }
 
     public function test_attendance_filters_by_organization_driver_dates_and_entry_exit(): void
@@ -71,22 +73,21 @@ class ReportsTest extends TestCase
         });
     }
 
-    public function test_admin_can_download_verification_vehicle_organization_and_activity_exports(): void
+    public function test_admin_can_download_each_pdf_report_and_managers_cannot_access_system_wide_reports(): void
     {
         $admin = User::factory()->create(['role' => 'SUPER_ADMIN']);
-        $headers = [
-            'driver-verification' => ['Driver', 'Organization', 'Status', 'Registration Date', 'Approved At', 'Approved By', 'Rejected At', 'Rejected By', 'Rejection Reason'],
-            'vehicle-register' => ['Vehicle ID', 'Plate Number', 'Driver', 'Organization', 'Type', 'Model', 'Status', 'Registration Date'],
-            'organization-activity' => ['Organization', 'Address', 'Contact Number', 'Email', 'Status', 'Managers', 'Drivers', 'Vehicles', 'Created At'],
-            'terminal-activity' => ['Activity ID', 'Activity', 'Actor', 'Driver', 'Organization', 'Details', 'Recorded At'],
-            'queue-activity' => ['Queue ID', 'Organization', 'Queue Number', 'Driver', 'Status', 'Queued By', 'Served By', 'Served At', 'Completed At'],
-        ];
-
-        foreach ($headers as $type => $header) {
+        foreach (array_keys(OperationsReport::TYPES) as $type) {
             $response = $this->actingAs($admin)->get(route('reports.export', ['type' => $type]));
-            $response->assertOk()->assertDownload();
-            $firstLine = strtok($response->streamedContent(), "\r\n");
-            $this->assertSame($header, str_getcsv($firstLine));
+            $response->assertOk()->assertDownload($type.'-'.now(OperationsReport::ZONE)->toDateString().'.pdf')
+                ->assertHeader('Content-Type', 'application/pdf');
+            $this->assertStringStartsWith('%PDF-', $response->getContent());
+            $this->assertMatchesRegularExpression('/\/MediaBox\s*\[0(?:\.0+)?\s+0(?:\.0+)?\s+841\.\d+\s+595\.\d+\s*\]/', $response->getContent());
+        }
+
+        $this->getJson(route('reports.export', ['type' => 'driver-summary']))->assertUnprocessable();
+        $manager = User::factory()->create(['role' => 'Manager']);
+        foreach (['reports', 'reports.export', 'queues.monitoring', 'queues.feed'] as $route) {
+            $this->actingAs($manager)->get(route($route))->assertForbidden();
         }
     }
 }

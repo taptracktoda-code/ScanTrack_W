@@ -26,11 +26,20 @@ class QueueRemovalService
                 throw ValidationException::withMessages(['queue' => ['This driver is no longer waiting. Refresh the request before reviewing it.']]);
             }
             $text = $reason === 'left_terminal' ? 'Left terminal' : $details;
-            $locked->forceFill(['status' => 'CANCELLED', 'completed_at' => now(), 'removed_at' => now(),
+            $timestamp = now();
+            $locked->forceFill(['status' => 'CANCELLED', 'completed_at' => $timestamp, 'removed_at' => $timestamp,
                 'removed_by' => $manager->id, 'removal_reason' => $reason, 'removal_details' => $reason === 'other' ? $details : null])->save();
             $latest = DriverLog::where('driver_id', $driver->id)->latest('created_at')->latest('id')->first();
             if ($latest?->attendance_type === 'ENTRY') {
-                DriverLog::create(['driver_id' => $driver->id, 'attendance_type' => 'EXIT', 'scanned_at' => now(), 'scan_method' => 'MANUAL']);
+                $legacyCheckIn = $locked->entry_log_id === null && $locked->queued_by && $latest->scan_method === 'QR'
+                    && ($latest->scanned_at ?? $latest->created_at)?->equalTo($locked->created_at);
+                $entryLog = (int) $latest->organization_id === (int) $organization->id
+                    && ($locked->entry_log_id === $latest->id || $legacyCheckIn) ? $latest : null;
+                DriverLog::create([
+                    'driver_id' => $driver->id, 'organization_id' => $organization->id,
+                    'entry_log_id' => $entryLog?->id, 'terminal_id' => $entryLog?->terminal_id,
+                    'attendance_type' => 'EXIT', 'scanned_at' => $timestamp, 'scan_method' => 'MANUAL',
+                ]);
             }
             TerminalActivity::create(['admin_id' => $manager->id, 'driver_id' => $driver->id,
                 'activity' => 'Driver removed from queue', 'description' => 'Queue #'.$locked->queue_number.' at '.$organization->name.': '.$text]);

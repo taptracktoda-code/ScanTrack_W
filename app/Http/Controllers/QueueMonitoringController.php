@@ -2,34 +2,54 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\TerminalActivity;
+use App\Models\Driver;
+use App\Models\DriverLog;
 use App\Models\TodaOrganization;
+use App\Services\OperationsReport;
+use Illuminate\Http\Request;
+use Illuminate\Http\Response;
+use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\View\View;
 
 class QueueMonitoringController extends Controller
 {
-    public function index(): View
+    public function index(Request $request, OperationsReport $reports): View
     {
-        $organizations = TodaOrganization::query()->orderBy('name')->get()->map(function (TodaOrganization $organization): array {
-            $current = $organization->queueEntries()->with('driver')->where('status', 'SERVING')->first();
-            $waiting = $organization->queueEntries()->where('status', 'WAITING')->count();
-            $lastServed = $organization->queueEntries()->with('driver')->where('status', 'COMPLETED')->latest('completed_at')->first();
+        $filters = $reports->filters($request);
 
-            return [
-                'organization' => $organization,
-                'current' => $current,
-                'waiting' => $waiting,
-                'last_served' => $lastServed,
-                'state' => $current ? 'Serving' : ($waiting > 0 ? 'Waiting' : 'Idle'),
-            ];
-        });
-        $activities = TerminalActivity::query()
-            ->with(['admin', 'driver.organization'])
-            ->whereIn('activity', ['Queue driver added', 'Queue driver called', 'Queue driver served'])
-            ->latest()
-            ->limit(30)
-            ->get();
+        return view('queues.index', $this->monitor($request, $reports, $filters) + [
+            'filters' => $filters,
+            'terminals' => DriverLog::query()->whereNotNull('terminal_id')->where('terminal_id', '<>', '')
+                ->distinct()->orderBy('terminal_id')->pluck('terminal_id'),
+            'organizations' => TodaOrganization::orderBy('name')->get(['id', 'name']),
+            'drivers' => Driver::orderBy('name')->get(['id', 'name']),
+            'reportTypes' => OperationsReport::TYPES,
+            'statuses' => OperationsReport::STATUSES,
+        ]);
+    }
 
-        return view('queues.index', compact('organizations', 'activities'));
+    public function feed(Request $request, OperationsReport $reports): Response
+    {
+        $filters = $reports->filters($request);
+        $response = response()->view('queues.records', $this->monitor($request, $reports, $filters))
+            ->header('Cache-Control', 'private, no-cache');
+        $response->setEtag(hash('sha256', $response->getContent()));
+        $response->isNotModified($request);
+
+        return $response;
+    }
+
+    private function monitor(Request $request, OperationsReport $reports, array $filters): array
+    {
+        $snapshot = $reports->snapshot($filters);
+        $pageSize = 25;
+        $total = $snapshot['records']->count();
+        $page = min(max(1, (int) $request->query('page', 1)), max(1, (int) ceil($total / $pageSize)));
+        $records = new LengthAwarePaginator($snapshot['records']->forPage($page, $pageSize), $total, $pageSize, $page, [
+            'path' => route('queues.monitoring'),
+            'query' => $filters,
+        ]);
+
+        return ['summary' => $snapshot['summary'], 'records' => $records];
     }
 }
