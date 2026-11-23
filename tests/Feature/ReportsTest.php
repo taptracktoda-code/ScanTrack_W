@@ -14,7 +14,7 @@ class ReportsTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_admin_can_view_driver_reports_and_exports(): void
+    public function test_admin_can_view_driver_and_manager_records_and_exports(): void
     {
         $admin = User::factory()->create(['role' => 'Administrator']);
         Driver::create([
@@ -24,6 +24,15 @@ class ReportsTest extends TestCase
             'vehicle_number' => 'ABC-1234',
             'status' => 'Active',
         ]);
+        $organization = TodaOrganization::create(['name' => 'Central TODA', 'barangay_travel_area' => 'Central Area']);
+        $manager = User::factory()->create([
+            'name' => 'Rico Santos',
+            'role' => 'Manager',
+            'organization_id' => $organization->id,
+            'contact' => '09170000001',
+        ]);
+        $unassignedManager = User::factory()->create(['role' => User::ROLE_MANAGER]);
+        $driverAccount = User::factory()->create(['role' => User::ROLE_DRIVER]);
 
         $this->actingAs($admin)
             ->get(route('reports'))
@@ -32,6 +41,10 @@ class ReportsTest extends TestCase
             ->assertSee('Driver registrations')
             ->assertSee('Available exports')
             ->assertSee('Maria Santos')
+            ->assertSee('Manager records')
+            ->assertSeeInOrder(['Rico Santos', 'Central TODA', $manager->email, '09170000001'])
+            ->assertSee($unassignedManager->email)
+            ->assertDontSee($driverAccount->email)
             ->assertSee('Driver Entry and Exit Report')
             ->assertSee('Queue Monitoring');
     }

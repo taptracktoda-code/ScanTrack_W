@@ -33,8 +33,9 @@ class VehicleTest extends TestCase
         $response = $this->actingAs($user)->get(route('vehicles'));
 
         $response->assertOk();
-        $response->assertSee('<td>'.$vehicle->name.'</td>', false);
-        $response->assertSee($vehicle->plate_number);
+        $response->assertSee('<td>'.$vehicle->plate_number.'</td>', false);
+        $response->assertDontSee('<th>Model</th>', false);
+        $response->assertDontSee('<td>'.$vehicle->name.'</td>', false);
     }
 
     public function test_vehicle_page_shows_legacy_driver_name_only_in_driver_column(): void
@@ -54,7 +55,7 @@ class VehicleTest extends TestCase
 
         $this->actingAs($admin)->get(route('vehicles'))
             ->assertOk()
-            ->assertSeeInOrder(['<td>—</td>', '<td>OLD-123</td>', '<td>Tricycle</td>', '<td>Rico Santos</td>'], false)
+            ->assertSeeInOrder(['<td>OLD-123</td>', '<td>Tricycle</td>', '<td>Rico Santos</td>'], false)
             ->assertDontSee('value="Rico Santos"', false);
     }
 

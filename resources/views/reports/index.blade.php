@@ -22,7 +22,7 @@
             <div>
                 <p class="reports-eyebrow">SCANTRACK / OPERATIONS</p>
                 <h1 class="reports-title">Reports</h1>
-                <p class="reports-description">Driver registrations, terminal attendance, queue sessions, and trip history.</p>
+                <p class="reports-description">Driver and manager records, terminal attendance, queue sessions, and trip history.</p>
             </div>
             <a class="btn reports-primary-action" href="{{ route('queues.monitoring') }}">
                 <i class="bi bi-list-ol" aria-hidden="true"></i>
@@ -145,6 +145,47 @@
                     </tbody>
                 </table>
             </div>
+        </section>
+        <section class="reports-table-panel" id="manager-records" aria-labelledby="manager-records-heading">
+            <div class="reports-table-heading">
+                <div>
+                    <h2 id="manager-records-heading">Manager records</h2>
+                    <p>Manager accounts and their assigned TODAs.</p>
+                </div>
+                <span class="reports-record-count"><i class="bi bi-people" aria-hidden="true"></i>{{ number_format($managers->total()) }} {{ Str::plural('manager', $managers->total()) }}</span>
+            </div>
+            <div class="table-responsive">
+                <table class="table reports-table align-middle mb-0">
+                    <caption class="visually-hidden">Manager account details</caption>
+                    <thead>
+                        <tr>
+                            <th scope="col">Manager</th>
+                            <th scope="col">Assigned TODA</th>
+                            <th scope="col">Email</th>
+                            <th scope="col">Contact</th>
+                            <th scope="col">Status</th>
+                            <th scope="col">Last updated</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @forelse ($managers as $manager)
+                            <tr>
+                                <td class="fw-bold">{{ $manager->name }}</td>
+                                <td>{{ $manager->organization?->name ?? 'Unassigned' }}</td>
+                                <td>{{ $manager->email }}</td>
+                                <td>{{ $manager->contact ?: 'Not set' }}</td>
+                                <td><span class="driver-status-badge {{ $manager->status === 'Active' ? 'is-active' : 'is-suspended' }}">{{ $manager->status }}</span></td>
+                                <td>{{ $manager->updated_at?->timezone(\App\Services\OperationsReport::ZONE)->format('M j, Y') }}</td>
+                            </tr>
+                        @empty
+                            <tr><td colspan="6" class="reports-table-empty">No manager records found.</td></tr>
+                        @endforelse
+                    </tbody>
+                </table>
+            </div>
+            @if ($managers->hasPages())
+                <div class="p-3">{{ $managers->links('pagination::bootstrap-5') }}</div>
+            @endif
         </section>
     </main>
 @endsection

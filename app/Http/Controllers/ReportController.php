@@ -6,6 +6,7 @@ use App\Models\Driver;
 use App\Models\DriverLog;
 use App\Models\TerminalActivity;
 use App\Models\TodaOrganization;
+use App\Models\User;
 use App\Services\OperationsReport;
 use App\Services\OperationsReportPdf;
 use Illuminate\Http\JsonResponse;
@@ -25,6 +26,13 @@ class ReportController extends Controller
 
         return view('reports.index', [
             'drivers' => $drivers,
+            'managers' => User::query()
+                ->whereRaw('UPPER(role) = ?', [User::ROLE_MANAGER])
+                ->with('organization:id,name')
+                ->latest()
+                ->orderByDesc('id')
+                ->paginate(20, ['id', 'name', 'email', 'contact', 'organization_id', 'status', 'updated_at'], 'managers_page')
+                ->fragment('manager-records'),
             'monthlyPerformance' => $monthlyPerformance,
             'reportCards' => $this->reportCards($drivers, $driverLogCount),
             'reportTypes' => OperationsReport::TYPES,

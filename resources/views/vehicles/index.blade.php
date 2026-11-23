@@ -20,7 +20,6 @@
                 <table class="table table-hover align-middle mb-0">
                         <thead>
                         <tr>
-                            <th>Model</th>
                             <th>Plate Number</th>
                             <th>Type</th>
                             <th>Driver</th>
@@ -33,7 +32,6 @@
                     <tbody>
                         @forelse ($vehicles ?? [] as $vehicle)
                             <tr>
-                                <td>{{ $vehicle->modelName() ?? '—' }}</td>
                                 <td>{{ $vehicle->plate_number }}</td>
                                 <td>{{ $vehicle->vehicle_type ?: '—' }}</td>
                                 <td>{{ $vehicle->driver?->name ?: 'Unassigned' }}</td>
@@ -114,7 +112,7 @@
                             </div>
                         @empty
                             <tr>
-                                <td colspan="8" class="text-center text-muted py-4">No vehicles have been registered yet.</td>
+                                <td colspan="7" class="text-center text-muted py-4">No vehicles have been registered yet.</td>
                             </tr>
                         @endforelse
                     </tbody>
