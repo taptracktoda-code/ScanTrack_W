@@ -130,6 +130,7 @@ class DriverController extends Controller
             'license_expiration_date' => ['required', 'date'],
             'plate_number' => ['required', 'string', 'max:80', 'unique:vehicles,plate_number'],
             'vehicle_type' => ['required', 'string', 'max:80'],
+            'vehicle_model' => ['nullable', 'string', 'max:120'],
             'organization_id' => ['required', 'exists:toda_organizations,id'],
             'assigned_terminal' => ['nullable', 'string', 'max:255'],
         ]);
@@ -153,7 +154,7 @@ class DriverController extends Controller
             ]);
 
             Vehicle::create([
-                'name' => $name,
+                'name' => $attributes['vehicle_model'] ?? null,
                 'plate_number' => $attributes['plate_number'],
                 'vehicle_type' => $attributes['vehicle_type'],
                 'organization_id' => $attributes['organization_id'],

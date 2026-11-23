@@ -62,6 +62,7 @@ class ManagerPortalController extends Controller
             'license_expiration_date' => ['required', 'date'],
             'plate_number' => ['required', 'string', 'max:80', 'unique:vehicles,plate_number'],
             'vehicle_type' => ['required', 'string', 'max:80'],
+            'vehicle_model' => ['nullable', 'string', 'max:120'],
         ]);
 
         $result = $driverAccounts->create($attributes, $manager, $organization);
@@ -126,7 +127,7 @@ class ManagerPortalController extends Controller
     {
         $organization = $this->assignedOrganization($request->user());
         $attributes = $request->validate([
-            'name' => ['required', 'string', 'max:120'],
+            'name' => ['nullable', 'string', 'max:120'],
             'plate_number' => ['required', 'string', 'max:80', 'unique:vehicles,plate_number'],
             'vehicle_type' => ['nullable', 'string', 'max:80'],
             'status' => ['required', 'in:Active,Inactive'],
@@ -141,7 +142,7 @@ class ManagerPortalController extends Controller
     {
         $this->ensureOwnVehicle($request->user(), $vehicle);
         $attributes = $request->validate([
-            'name' => ['required', 'string', 'max:120'],
+            'name' => ['nullable', 'string', 'max:120'],
             'plate_number' => ['required', 'string', 'max:80', Rule::unique('vehicles', 'plate_number')->ignore($vehicle->id)],
             'vehicle_type' => ['nullable', 'string', 'max:80'],
             'status' => ['required', 'in:Active,Inactive'],

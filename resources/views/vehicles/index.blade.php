@@ -20,7 +20,7 @@
                 <table class="table table-hover align-middle mb-0">
                         <thead>
                         <tr>
-                            <th>Vehicle / Model</th>
+                            <th>Model</th>
                             <th>Plate Number</th>
                             <th>Type</th>
                             <th>Driver</th>
@@ -33,7 +33,7 @@
                     <tbody>
                         @forelse ($vehicles ?? [] as $vehicle)
                             <tr>
-                                <td>{{ $vehicle->name }}</td>
+                                <td>{{ $vehicle->modelName() ?? '—' }}</td>
                                 <td>{{ $vehicle->plate_number }}</td>
                                 <td>{{ $vehicle->vehicle_type ?: '—' }}</td>
                                 <td>{{ $vehicle->driver?->name ?: 'Unassigned' }}</td>
@@ -47,16 +47,16 @@
                                             type="button"
                                             data-bs-toggle="modal"
                                             data-bs-target="#vehicleEditModal-{{ $vehicle->id }}"
-                                            aria-label="Edit {{ $vehicle->name }}"
+                                            aria-label="Edit vehicle {{ $vehicle->plate_number }}"
                                             title="Edit"
                                         >
                                             <i class="bi bi-pencil-fill"></i>
                                         </button>
 
-                                        <form action="{{ route('vehicles.destroy', $vehicle) }}" method="POST" data-swal-delete data-swal-name="{{ $vehicle->name }}">
+                                        <form action="{{ route('vehicles.destroy', $vehicle) }}" method="POST" data-swal-delete data-swal-name="{{ $vehicle->plate_number }}">
                                             @csrf
                                             @method('DELETE')
-                                            <button class="btn btn-outline-danger btn-sm" type="submit" aria-label="Delete {{ $vehicle->name }}" title="Delete">
+                                            <button class="btn btn-outline-danger btn-sm" type="submit" aria-label="Delete vehicle {{ $vehicle->plate_number }}" title="Delete">
                                                 <i class="bi bi-trash-fill"></i>
                                             </button>
                                         </form>
@@ -76,8 +76,8 @@
                                             </div>
                                             <div class="modal-body">
                                                 <div class="mb-3">
-                                                    <label class="form-label">Vehicle Name</label>
-                                                    <input type="text" name="name" class="form-control" value="{{ old('name', $vehicle->name) }}" required>
+                                                    <label class="form-label" for="vehicle-model-{{ $vehicle->id }}">Vehicle model (optional)</label>
+                                                    <input type="text" id="vehicle-model-{{ $vehicle->id }}" name="name" class="form-control" value="{{ old('name', $vehicle->modelName()) }}" maxlength="120">
                                                 </div>
                                                 <div class="mb-3">
                                                     <label class="form-label">Plate Number</label>
@@ -135,8 +135,8 @@
                     </div>
                     <div class="modal-body">
                         <div class="mb-3">
-                            <label class="form-label">Vehicle Name</label>
-                            <input type="text" name="name" class="form-control @error('name') is-invalid @enderror" value="{{ old('name') }}" required>
+                            <label class="form-label" for="vehicle-create-model">Vehicle model (optional)</label>
+                            <input type="text" id="vehicle-create-model" name="name" class="form-control @error('name') is-invalid @enderror" value="{{ old('name') }}" maxlength="120">
                             @error('name')
                                 <div class="invalid-feedback">{{ $message }}</div>
                             @enderror

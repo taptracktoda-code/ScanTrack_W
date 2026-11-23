@@ -28,6 +28,10 @@
                         <input class="form-control" id="driver-{{ $field }}" name="{{ $field }}" value="{{ old($field) }}" @if ($field === 'email') type="email" @elseif ($field === 'license_expiration_date') type="date" @endif @if ($field !== 'middle_name') required @endif>
                     </div>
                 @endforeach
+                <div class="col-12 col-md-6 col-xl-4">
+                    <label class="form-label" for="driver-vehicle-model">Vehicle model (optional)</label>
+                    <input class="form-control" id="driver-vehicle-model" name="vehicle_model" value="{{ old('vehicle_model') }}" maxlength="120">
+                </div>
                 <div class="col-12">
                     <label class="form-label" for="driver-address">Address</label>
                     <textarea class="form-control" id="driver-address" name="address" rows="2" required>{{ old('address') }}</textarea>

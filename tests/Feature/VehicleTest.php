@@ -33,8 +33,29 @@ class VehicleTest extends TestCase
         $response = $this->actingAs($user)->get(route('vehicles'));
 
         $response->assertOk();
-        $response->assertSee($vehicle->name);
+        $response->assertSee('<td>'.$vehicle->name.'</td>', false);
         $response->assertSee($vehicle->plate_number);
+    }
+
+    public function test_vehicle_page_shows_legacy_driver_name_only_in_driver_column(): void
+    {
+        $admin = User::factory()->create(['role' => 'SUPER_ADMIN']);
+        $driver = Driver::create([
+            'name' => 'Rico Santos',
+            'license_number' => 'LIC-VEHICLE-LEGACY',
+            'vehicle_number' => 'OLD-123',
+            'status' => 'Active',
+        ]);
+        Vehicle::create([
+            'name' => $driver->name,
+            'plate_number' => $driver->vehicle_number,
+            'vehicle_type' => 'Tricycle',
+        ]);
+
+        $this->actingAs($admin)->get(route('vehicles'))
+            ->assertOk()
+            ->assertSeeInOrder(['<td>—</td>', '<td>OLD-123</td>', '<td>Tricycle</td>', '<td>Rico Santos</td>'], false)
+            ->assertDontSee('value="Rico Santos"', false);
     }
 
     public function test_legacy_direct_driver_creation_route_is_not_exposed(): void

@@ -48,6 +48,7 @@ class DriverVerificationController extends Controller
             'organization_id' => ['required', 'integer', Rule::exists('toda_organizations', 'id')->where('status', 'Active')],
             'plate_number' => ['required', 'string', 'max:80', 'unique:vehicles,plate_number'],
             'vehicle_type' => ['required', 'string', 'max:80'],
+            'vehicle_model' => ['nullable', 'string', 'max:120'],
         ]);
 
         DB::transaction(function () use ($attributes, $driver): void {
@@ -58,7 +59,7 @@ class DriverVerificationController extends Controller
             ])->save();
 
             Vehicle::create([
-                'name' => $driver->name,
+                'name' => $attributes['vehicle_model'] ?? null,
                 'plate_number' => $attributes['plate_number'],
                 'vehicle_type' => $attributes['vehicle_type'],
                 'organization_id' => $organization->id,

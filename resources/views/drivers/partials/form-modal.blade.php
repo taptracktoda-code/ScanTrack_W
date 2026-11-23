@@ -113,6 +113,10 @@
                     </div>
                     @if ($isCreate)
                         <div class="col-md-6">
+                            <label class="form-label" for="{{ $modalId }}-vehicle-model">Vehicle model (optional)</label>
+                            <input class="form-control" id="{{ $modalId }}-vehicle-model" name="vehicle_model" value="{{ old('vehicle_model') }}" maxlength="120">
+                        </div>
+                        <div class="col-md-6">
                             <label class="form-label" for="{{ $modalId }}-vehicle-type">Vehicle type</label>
                             <input class="form-control" id="{{ $modalId }}-vehicle-type" name="vehicle_type" value="{{ old('vehicle_type') }}" required>
                         </div>

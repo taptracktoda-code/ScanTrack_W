@@ -24,7 +24,7 @@ class VehicleController extends Controller
     public function store(Request $request): RedirectResponse
     {
         $validated = $request->validate([
-            'name' => ['required', 'string', 'max:120'],
+            'name' => ['nullable', 'string', 'max:120'],
             'plate_number' => ['required', 'string', 'max:80', 'unique:vehicles,plate_number'],
             'vehicle_type' => ['nullable', 'string', 'max:80'],
             'organization_id' => ['nullable', 'integer', 'exists:toda_organizations,id'],
@@ -39,7 +39,7 @@ class VehicleController extends Controller
     public function update(Request $request, Vehicle $vehicle): RedirectResponse
     {
         $validated = $request->validate([
-            'name' => ['required', 'string', 'max:120'],
+            'name' => ['nullable', 'string', 'max:120'],
             'plate_number' => ['required', 'string', 'max:80', Rule::unique('vehicles', 'plate_number')->ignore($vehicle->id)],
             'vehicle_type' => ['nullable', 'string', 'max:80'],
             'organization_id' => ['nullable', 'integer', 'exists:toda_organizations,id'],

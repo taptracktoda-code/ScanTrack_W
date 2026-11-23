@@ -33,6 +33,7 @@ class DriverRegistrationTest extends TestCase
             'license_expiration_date' => now()->addYear()->toDateString(),
             'plate_number' => 'ABC-1234',
             'vehicle_type' => 'Tricycle',
+            'vehicle_model' => 'Honda TMX 125',
             'organization_id' => $organization->id,
         ]);
 
@@ -44,7 +45,12 @@ class DriverRegistrationTest extends TestCase
             'vehicle_number' => 'ABC-1234',
             'status' => 'Pending',
         ]);
-        $this->assertDatabaseHas('vehicles', ['plate_number' => 'ABC-1234', 'vehicle_type' => 'Tricycle', 'status' => 'Pending']);
+        $this->assertDatabaseHas('vehicles', [
+            'name' => 'Honda TMX 125',
+            'plate_number' => 'ABC-1234',
+            'vehicle_type' => 'Tricycle',
+            'status' => 'Pending',
+        ]);
         $this->assertDatabaseCount('qr_codes', 0);
         $this->assertDatabaseHas('terminal_activities', [
             'driver_id' => \App\Models\Driver::firstOrFail()->id,

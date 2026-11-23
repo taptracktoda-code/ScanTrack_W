@@ -14,6 +14,14 @@ class Vehicle extends Model
         'organization_id',
     ];
 
+    public function modelName(): ?string
+    {
+        $name = trim($this->name ?? '');
+        $driverName = trim($this->driver?->name ?? '');
+
+        return $name !== '' && strcasecmp($name, $driverName) !== 0 ? $name : null;
+    }
+
     public function organization()
     {
         return $this->belongsTo(TodaOrganization::class, 'organization_id');

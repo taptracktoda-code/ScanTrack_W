@@ -44,7 +44,7 @@ class ManagerDriverAccountService
             ]);
 
             Vehicle::create([
-                'name' => $name,
+                'name' => $attributes['vehicle_model'] ?? null,
                 'plate_number' => $attributes['plate_number'],
                 'vehicle_type' => $attributes['vehicle_type'],
                 'organization_id' => $organization->id,

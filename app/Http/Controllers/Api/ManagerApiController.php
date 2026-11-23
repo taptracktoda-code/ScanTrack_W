@@ -405,6 +405,7 @@ class ManagerApiController extends Controller
             'license_expiration_date' => ['required', 'date'],
             'plate_number' => ['required', 'string', 'max:80', 'unique:vehicles,plate_number'],
             'vehicle_type' => ['required', 'string', 'max:80'],
+            'vehicle_model' => ['nullable', 'string', 'max:120'],
         ]);
 
         $result = $driverAccounts->create($attributes, $manager, $organization);

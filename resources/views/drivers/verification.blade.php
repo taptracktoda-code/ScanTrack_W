@@ -41,6 +41,7 @@
                                         </select>
                                         <input name="plate_number" class="form-control form-control-sm" value="{{ old('plate_number') }}" maxlength="80" placeholder="Vehicle plate number" required>
                                         <input name="vehicle_type" class="form-control form-control-sm" value="{{ old('vehicle_type') }}" maxlength="80" placeholder="Vehicle type" required>
+                                        <input name="vehicle_model" class="form-control form-control-sm" value="{{ old('vehicle_model') }}" maxlength="120" aria-label="Vehicle model (optional)" placeholder="Vehicle model (optional)">
                                         <button class="btn btn-sm btn-primary">Assign and continue</button>
                                     </form>
                                 @else
