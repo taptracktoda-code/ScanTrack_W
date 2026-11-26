@@ -26,7 +26,10 @@ class DriverController extends Controller
     {
         $search = trim((string) $request->query('search', ''));
         $driverId = preg_match('/^(?:DRIVER-)?(\d+)$/i', $search, $matches) ? (int) $matches[1] : null;
-        $driverQuery = Driver::with(['organization', 'qrCode']);
+        $driverQuery = Driver::with([
+            'organization.managers' => fn ($query) => $query->orderBy('name'),
+            'qrCode',
+        ]);
 
         if ($search !== '') {
             $driverQuery->where(function ($query) use ($search, $driverId): void {

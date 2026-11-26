@@ -140,6 +140,7 @@
                                         @endif
                                     </div>
                                     <div class="admin-driver-organization">{{ $driver->organization?->name ?: 'No TODA assigned' }}</div>
+                                    <span class="admin-driver-detail">Manager: {{ $driver->organization?->managers->implode('name', ', ') ?: 'Unassigned' }}</span>
                                     @if ($driver->assigned_terminal)
                                         <span class="admin-driver-detail">Terminal · {{ $driver->assigned_terminal }}</span>
                                     @endif

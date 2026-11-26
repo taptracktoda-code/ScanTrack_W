@@ -20,7 +20,8 @@ class TodaOrganization extends Model
 
     public function managers()
     {
-        return $this->hasMany(User::class, 'organization_id')->where('role', User::ROLE_MANAGER);
+        return $this->hasMany(User::class, 'organization_id')
+            ->whereRaw('LOWER(role) = ?', [strtolower(User::ROLE_MANAGER)]);
     }
 
     public function drivers()
